@@ -11,6 +11,8 @@ on:
 jobs:
   windows:
     runs-on: windows-latest
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +42,22 @@ jobs:
             tail -n 60 tests.log || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post test failures
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "Automated test failure report for ${GITHUB_SHA}."
+            echo
+            echo '```text'
+            tail -n 80 tests.log || echo "no tests.log"
+            echo '```'
+          } > report.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" \
+            -f body="$(cat report.md)" >/dev/null
 
       - name: Smoke test the desktop window
         continue-on-error: true
