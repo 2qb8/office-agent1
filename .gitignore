@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+config/.env
+jobs/*/state.json
+jobs/*/run.log
