@@ -1,0 +1,87 @@
+Test failure report for dac9f21a9ceedffcf7016bb2bdfc16b429eb76c3
+
+FAIL: test_defaults_and_argument_alias (test_spec.BuildPlanTests.test_defaults_and_argument_alias)
+Ran 108 tests in 2.803s
+FAILED (failures=1)
+
+--- tail ---
+test_language_switch_translates_the_window (test_ui.GuiWindowTests.test_language_switch_translates_the_window) ... ok
+test_run_without_instruction_explains (test_ui.GuiWindowTests.test_run_without_instruction_explains) ... ok
+test_every_language_defines_the_same_strings (test_ui.LanguageTests.test_every_language_defines_the_same_strings) ... ok
+test_russian_strings_are_not_empty (test_ui.LanguageTests.test_russian_strings_are_not_empty) ... ok
+test_text_falls_back_to_english (test_ui.LanguageTests.test_text_falls_back_to_english) ... ok
+test_text_formats_values (test_ui.LanguageTests.test_text_formats_values) ... ok
+test_instruction_suffixes (test_ui.PathTests.test_instruction_suffixes) ... ok
+test_output_folder_sits_beside_the_instruction (test_ui.PathTests.test_output_folder_sits_beside_the_instruction) ... ok
+test_missing_settings_file_is_empty (test_ui.SettingsTests.test_missing_settings_file_is_empty) ... ok
+test_settings_round_trip (test_ui.SettingsTests.test_settings_round_trip) ... ok
+test_unknown_language_is_ignored (test_ui.SettingsTests.test_unknown_language_is_ignored) ... ok
+test_evidence_must_stay_in_evidence_dir (test_validation.ValidationTests.test_evidence_must_stay_in_evidence_dir) ... ok
+test_forward_reference_rejected (test_validation.ValidationTests.test_forward_reference_rejected) ... ok
+test_inputs_cannot_be_modified (test_validation.ValidationTests.test_inputs_cannot_be_modified) ... ok
+test_output_must_stay_in_output_dir (test_validation.ValidationTests.test_output_must_stay_in_output_dir) ... ok
+test_unknown_tool_rejected (test_validation.ValidationTests.test_unknown_tool_rejected) ... ok
+test_valid_plan_passes_validation (test_validation.ValidationTests.test_valid_plan_passes_validation) ... ok
+test_write_action_requires_output_path (test_validation.ValidationTests.test_write_action_requires_output_path) ... ok
+test_header_row_option (test_word_table.WordReadTableTests.test_header_row_option) ... ok
+test_max_rows_option (test_word_table.WordReadTableTests.test_max_rows_option) ... ok
+test_missing_path_argument (test_word_table.WordReadTableTests.test_missing_path_argument) ... ok
+test_reads_first_table_headers_and_rows (test_word_table.WordReadTableTests.test_reads_first_table_headers_and_rows) ... ok
+test_reads_table_by_index (test_word_table.WordReadTableTests.test_reads_table_by_index) ... ok
+test_table_index_out_of_range (test_word_table.WordReadTableTests.test_table_index_out_of_range) ... ok
+
+======================================================================
+FAIL: test_defaults_and_argument_alias (test_spec.BuildPlanTests.test_defaults_and_argument_alias)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\a\office-agent1\office-agent1\tests\test_spec.py", line 109, in test_defaults_and_argument_alias
+    self.assertTrue(
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 108 tests in 2.803s
+
+FAILED (failures=1)
+2026-11-13T10:51:04+00:00  ORCHESTRATOR  Job started: 20261113_105104_evidence-job
+2026-11-13T10:51:04+00:00  INSTRUCTION   Reading instruction.docx
+2026-11-13T10:51:04+00:00  INSTRUCTION   Loaded 113 words, 1171 characters
+2026-11-13T10:51:04+00:00  SPEC          Parsing job spec from the instruction document
+2026-11-13T10:51:04+00:00  PLANNER       Plan 'Evidence job' has 7 steps
+2026-11-13T10:51:04+00:00  PLANNER       Step notes: text.read
+2026-11-13T10:51:04+00:00  PLANNER       Step report: word.create_document
+2026-11-13T10:51:04+00:00  PLANNER       Step preview: screenshot.document
+2026-11-13T10:51:04+00:00  PLANNER       Step attach: word.append_image
+2026-11-13T10:51:04+00:00  PLANNER       Step footer: word.append_elements
+2026-11-13T10:51:04+00:00  PLANNER       Step export: word.export_text
+2026-11-13T10:51:04+00:00  PLANNER       Step reread: text.read
+2026-11-13T10:51:04+00:00  VALIDATOR     Validating generated plan
+2026-11-13T10:51:04+00:00  VALIDATOR     Plan validation passed
+2026-11-13T10:51:04+00:00  EXECUTOR      Starting execution
+2026-11-13T10:51:04+00:00  EXECUTOR      notes started: text.read
+2026-11-13T10:51:04+00:00  TEXT          Action: read
+2026-11-13T10:51:04+00:00  TEXT          notes succeeded: Read notes.txt
+2026-11-13T10:51:04+00:00  EXECUTOR      report started: word.create_document
+2026-11-13T10:51:04+00:00  WORD          Action: create_document
+2026-11-13T10:51:04+00:00  WORD          report succeeded: Created Word document: report.docx
+2026-11-13T10:51:04+00:00  EXECUTOR      preview started: screenshot.document
+2026-11-13T10:51:04+00:00  SCREENSHOT    Action: document
+2026-11-13T10:51:04+00:00  SCREENSHOT    preview succeeded: Rendered report.png
+2026-11-13T10:51:04+00:00  EXECUTOR      attach started: word.append_image
+2026-11-13T10:51:04+00:00  WORD          Action: append_image
+2026-11-13T10:51:04+00:00  WORD          attach succeeded: Added report.png to report.docx
+2026-11-13T10:51:04+00:00  EXECUTOR      footer started: word.append_elements
+2026-11-13T10:51:04+00:00  WORD          Action: append_elements
+2026-11-13T10:51:04+00:00  WORD          footer succeeded: Appended 1 elements to report.docx
+2026-11-13T10:51:04+00:00  EXECUTOR      export started: word.export_text
+2026-11-13T10:51:04+00:00  WORD          Action: export_text
+2026-11-13T10:51:04+00:00  WORD          export succeeded: Exported report.docx to report.txt
+2026-11-13T10:51:04+00:00  EXECUTOR      reread started: text.read
+2026-11-13T10:51:04+00:00  TEXT          Action: read
+2026-11-13T10:51:04+00:00  TEXT          reread succeeded: Read report.txt
+2026-11-13T10:51:04+00:00  ORCHESTRATOR  Job completed: 20261113_105104_evidence-job
+2026-11-13T10:51:04+00:00  EXECUTOR      Execution finished: success
+2026-11-13T10:51:04+00:00  OUTPUT        C:\Users\runneradmin\AppData\Local\Temp\tmpbl_x9vqh\evidence-job\output\report.docx
+2026-11-13T10:51:04+00:00  OUTPUT        C:\Users\runneradmin\AppData\Local\Temp\tmpbl_x9vqh\evidence-job\output\report.txt
+2026-11-13T10:51:04+00:00  REPORT        Wrote report.json
+2026-11-13T10:51:04+00:00  ORCHESTRATOR  Job finished: success
+LLM test-model: HTTP 429 on attempt 1/2; retrying in 0.0s
