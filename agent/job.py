@@ -11,15 +11,34 @@ IGNORED_INSTRUCTION_NAMES = {"instruction_template.docx"}
 
 def find_instruction_file(
     job_path: Path,
+    instruction_path: Path | None = None,
 ) -> Path:
     """
     Return the single instruction document in a job directory.
 
     A job holds exactly one instruction (.docx or .txt) plus an
-    optional inputs/ directory.
+    optional inputs/ directory. When instruction_path is given, that
+    file is used instead of scanning the folder, which lets a UI run a
+    chosen document from a folder that holds other documents too.
     """
 
     job_path = Path(job_path).resolve()
+
+    if instruction_path is not None:
+        candidate = Path(instruction_path).expanduser().resolve()
+
+        if not candidate.is_file():
+            raise FileNotFoundError(
+                f"Instruction file not found: {candidate}"
+            )
+
+        if candidate.suffix.lower() not in INSTRUCTION_SUFFIXES:
+            raise ValueError(
+                "Instruction must be one of: "
+                + ", ".join(sorted(INSTRUCTION_SUFFIXES))
+            )
+
+        return candidate
 
     if not job_path.exists():
         raise FileNotFoundError(
@@ -61,6 +80,7 @@ def find_instruction_file(
 
 def create_job(
     job_path: Path,
+    instruction_path: Path | None = None,
 ) -> Path:
     """
     Prepare a job directory.
@@ -79,7 +99,7 @@ def create_job(
 
     job_path = Path(job_path).resolve()
 
-    find_instruction_file(job_path)
+    find_instruction_file(job_path, instruction_path)
 
     for name in ("output", "evidence", "inputs"):
         (job_path / name).mkdir(

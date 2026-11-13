@@ -12,6 +12,28 @@ filtering rows, summarising them and writing a report is a few declarations.
 AI planning is not required. The planner modules are still present and wired
 to the runtime, but they are opt-in and unconfigured (see [AI planning](#ai-planning-later)).
 
+## Desktop app (single file)
+
+If you just want to run a job without a terminal, download
+`office-agent-gui.exe` from the latest `build-exe` GitHub Actions run
+(artifact `office-agent-windows`) or from the Releases page. It is one file,
+needs no Python and no installation:
+
+1. Double-click `office-agent-gui.exe`.
+2. **Browse…** to your instruction `.docx` (or `.txt` / `.md`).
+3. The output folder beside it appears in the window.
+4. Choose **English** or **Русский** — the choice is remembered.
+5. Press **Run**.
+
+The window logs every step, and **Open output folder** shows the generated
+files. The app runs the deterministic engine with AI off, so the instruction
+must contain a `steps` block; inputs referenced as `inputs/...` are read from
+folders beside the instruction file. The command-line executable
+(`office-agent.exe`) is in the same artifact.
+
+Build both yourself with `python build_exe.py` (Windows, or Linux with
+`python3-tk` installed).
+
 ## Setup
 
 ```bash
@@ -319,7 +341,9 @@ text, appends to a document, renders a screenshot and attaches it.
 
 `tests/test_actions.py` has one test per advertised tool action, plus a
 meta-test that fails when an action has no test or is not wired into the
-tool's `run()`.
+tool's `run()`. `tests/test_ui.py` covers the desktop app's translations,
+remembered language, output-folder derivation and running one chosen
+instruction from a folder that holds several documents.
 
 ## Standalone executable
 
@@ -360,6 +384,8 @@ agent/
   ai_config.py       AI provider presets, config/.env writer, connection check
   planner.py, llm.py, llm_factory.py   AI planning (opt-in)
   metadata.py        document metadata defaults, resolution and application
+  ui.py              UI translations, settings and paths
+gui.py               desktop window: instruction, output folder, language, Run
 tools/
   excel.py, word.py, text.py, table.py, filesystem.py, screenshot.py
   render.py          DOCX/XLSX to PNG rendering for screenshots
@@ -373,11 +399,13 @@ tests/
   test_cli.py        CLI entry points and back-compatible job argument
   test_ai.py         LLM client, provider presets, config, AI planning
   test_planner_prompt.py  planner prompt covers every tool action
+  test_ui.py         translations, settings, paths, explicit-instruction runs
 examples/
   build_examples.py  rebuild the example job inputs and instruction
   sales-pack/        ready-to-run example job
-officeagent.spec     PyInstaller recipe
-build_exe.py         build the standalone executable
+officeagent.spec     PyInstaller recipe (command line)
+officeagent-gui.spec PyInstaller recipe (desktop window)
+build_exe.py         build both standalone executables
 ```
 
 ## AI planning (optional)

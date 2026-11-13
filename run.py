@@ -415,8 +415,26 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def launch_gui() -> int:
+    """Open the desktop window (what a double-clicked executable does)."""
+
+    try:
+        from gui import main as gui_main
+    except Exception as exc:
+        print(
+            "The desktop window is unavailable "
+            f"({exc}).\nUse: office-agent run <job-folder>"
+        )
+        return 1
+
+    return gui_main()
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+
+    if not argv:
+        return launch_gui()
 
     # Backwards compatible: "python run.py <job-directory>".
     # Options such as --version or --help stay on the main parser.

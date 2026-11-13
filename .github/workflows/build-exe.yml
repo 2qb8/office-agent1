@@ -3,6 +3,8 @@ name: build-exe
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - "v*"
 
@@ -25,14 +27,35 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests -v
 
-      - name: Build executable
+      - name: Build executables
         run: python build_exe.py
 
-      - name: Smoke test executable
+      - name: Smoke test command line executable
         run: dist\office-agent.exe tools
 
       - uses: actions/upload-artifact@v4
         with:
           name: office-agent-windows
-          path: dist/office-agent.exe
+          path: |
+            dist/office-agent.exe
+            dist/office-agent-gui.exe
           if-no-files-found: error
+
+  release:
+    needs: windows
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: office-agent-windows
+          path: dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/office-agent.exe
+            dist/office-agent-gui.exe

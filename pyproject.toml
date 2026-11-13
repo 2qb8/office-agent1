@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "office-agent"
-version = "1.0.0"
+version = "1.1.0"
 description = "DOCX instruction in, DOCX/XLSX/TXT outputs out"
 readme = "README.md"
 requires-python = ">=3.10"

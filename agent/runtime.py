@@ -71,8 +71,18 @@ class AgentRuntime:
         self,
         job_path: Path,
         registry: ToolRegistry,
+        instruction_path: Path | None = None,
     ) -> None:
-        self.job_path = create_job(job_path)
+        self.instruction_path = (
+            Path(instruction_path).expanduser().resolve()
+            if instruction_path is not None
+            else None
+        )
+
+        self.job_path = create_job(
+            job_path,
+            self.instruction_path,
+        )
 
         self.job_id = make_job_id(self.job_path)
 
@@ -87,6 +97,9 @@ class AgentRuntime:
     # ------------------------------------------------------------------
 
     def find_instruction(self) -> Path:
+        if self.instruction_path is not None:
+            return self.instruction_path
+
         return find_instruction_file(self.job_path)
 
     def read_instruction(self) -> JobInstruction:
