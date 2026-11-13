@@ -11,6 +11,9 @@ on:
 jobs:
   windows:
     runs-on: windows-latest
+    # The publish step commits the executable to main; skip that bot push so
+    # it does not start another build.
+    if: github.actor != 'github-actions[bot]'
     permissions:
       contents: write
 
@@ -88,6 +91,19 @@ jobs:
             dist/office-agent-gui.exe
             dist/build-manifest.txt
           if-no-files-found: error
+
+      - name: Publish executable to main
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f dist/office-agent-gui.exe
+          if git diff --cached --quiet; then
+            echo "office-agent-gui.exe is unchanged"
+            exit 0
+          fi
+          git commit -m "Publish office-agent-gui.exe from ${GITHUB_SHA:0:7} [skip ci]"
+          git push origin HEAD:main
 
       - name: Publish build manifest
         shell: bash

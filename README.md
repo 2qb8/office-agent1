@@ -15,9 +15,12 @@ to the runtime, but they are opt-in and unconfigured (see [AI planning](#ai-plan
 ## Desktop app (single file)
 
 If you just want to run a job without a terminal, download
-`office-agent-gui.exe` from the latest `build-exe` GitHub Actions run
-(artifact `office-agent-windows`) or from the Releases page. It is one file,
-needs no Python and no installation:
+[`dist/office-agent-gui.exe`](dist/office-agent-gui.exe) straight from this
+repository. The Windows workflow rebuilds it on every successful push and
+commits it there, so the file in the repo is the latest build. It is one
+file, needs no Python and no installation. The same build is also attached
+to the `build-exe` workflow run as the `office-agent-windows` artifact,
+along with the command-line `office-agent.exe`.
 
 1. Double-click `office-agent-gui.exe`.
 2. **Browse…** to your instruction `.docx` (or `.txt` / `.md`).
