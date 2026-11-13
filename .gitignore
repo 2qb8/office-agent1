@@ -2,5 +2,15 @@
 __pycache__/
 *.pyc
 config/.env
+jobs/**/output/
 jobs/*/state.json
 jobs/*/run.log
+jobs/*/report.json
+examples/*/output/
+examples/*/evidence/
+examples/*/state.json
+examples/*/run.log
+examples/*/report.json
+dist/
+build/
+/.env

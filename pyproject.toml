@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "office-agent"
+version = "1.0.0"
+description = "DOCX instruction in, DOCX/XLSX/TXT outputs out"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "python-docx>=1.1.0",
+    "openpyxl>=3.1.0",
+    "pydantic>=2.5",
+    "PyYAML>=6.0",
+    "python-dotenv>=1.0",
+    "requests>=2.31",
+    "Pillow>=10.1",
+]
+
+[project.optional-dependencies]
+build = ["pyinstaller>=6.0"]
+
+[project.scripts]
+office-agent = "run:main"
+
+[tool.setuptools]
+py-modules = ["run"]
+packages = ["agent", "tools"]

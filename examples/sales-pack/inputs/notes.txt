@@ -1,0 +1,6 @@
+Monthly sales pack
+
+Sources:
+- inputs/sales.xlsx, worksheet "Sales".
+- Deals are counted when Units >= 20.
+- Revenue is already net of discounts.
