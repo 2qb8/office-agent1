@@ -1,0 +1,5 @@
+platform: Windows AMD64
+python: 3.12.10
+
+office-agent.exe: 27615249 bytes (26.3 MiB)
+office-agent-gui.exe: 30707217 bytes (29.3 MiB)
