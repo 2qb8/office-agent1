@@ -185,3 +185,89 @@ class GuiModuleTests(unittest.TestCase):
 
         self.assertTrue(hasattr(gui, "OfficeAgentWindow"))
         self.assertTrue(callable(gui.main))
+
+
+class GuiWindowTests(unittest.TestCase):
+    """Build the real window; skipped where Tk or a display is missing."""
+
+    def setUp(self):
+        if importlib.util.find_spec("tkinter") is None:
+            self.skipTest("tkinter is not installed")
+
+        self._settings = tempfile.TemporaryDirectory()
+        self.addCleanup(self._settings.cleanup)
+
+        patcher = mock.patch.dict(
+            os.environ,
+            {
+                ui.SETTINGS_ENV: str(
+                    Path(self._settings.name) / "settings.json"
+                )
+            },
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        import tkinter as tk
+
+        try:
+            self.root = tk.Tk()
+        except Exception as exc:
+            self.skipTest(f"no display: {exc}")
+
+        self.root.withdraw()
+
+        import gui
+
+        self.window = gui.OfficeAgentWindow(self.root)
+        self.root.update_idletasks()
+
+        self.addCleanup(self._destroy)
+
+    def _destroy(self):
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+
+    def test_instruction_fills_the_output_folder(self):
+        with tempfile.TemporaryDirectory() as directory:
+            job = Path(directory) / "job"
+            job.mkdir(parents=True)
+
+            instruction = job / "instruction.docx"
+            instruction.write_bytes(b"placeholder")
+
+            self.window.use_instruction(instruction)
+
+            self.assertIn(
+                "instruction.docx",
+                self.window.instruction_var.get(),
+            )
+            self.assertEqual(
+                self.window.output_var.get(),
+                str((job / "output").resolve()),
+            )
+
+    def test_language_switch_translates_the_window(self):
+        self.window.language_combo.set("Русский")
+        self.window.on_language()
+
+        self.assertEqual(self.window.language, "ru")
+        self.assertEqual(
+            self.window.run_button.cget("text"),
+            ui.text("ru", "run"),
+        )
+        self.assertEqual(
+            self.window.instruction_label.cget("text"),
+            ui.text("ru", "instruction"),
+        )
+
+    def test_run_without_instruction_explains(self):
+        self.window.instruction_var.set("")
+        self.window.run_job()
+
+        self.assertEqual(
+            self.window.status_var.get(),
+            ui.text(self.window.language, "no_instruction"),
+        )

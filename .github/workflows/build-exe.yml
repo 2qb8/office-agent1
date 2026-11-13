@@ -25,7 +25,25 @@ jobs:
           python -m pip install -r requirements.txt pyinstaller
 
       - name: Run tests
-        run: python -m unittest discover -s tests -v
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m unittest discover -s tests -v 2>&1 | tee tests.log
+
+      - name: Show test failures
+        if: failure()
+        shell: bash
+        run: |
+          {
+            echo "### Test output (tail)"
+            echo '```text'
+            tail -n 60 tests.log || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke test the desktop window
+        continue-on-error: true
+        run: python -c "import tkinter, gui; root = tkinter.Tk(); gui.OfficeAgentWindow(root); root.update_idletasks(); root.destroy(); print('window ok')"
 
       - name: Build executables
         run: python build_exe.py

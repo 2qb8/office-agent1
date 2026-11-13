@@ -124,12 +124,16 @@ class BuildPlanTests(unittest.TestCase):
         self.assertEqual(plan.goal, "From goal")
 
     def test_references_and_absolute_paths_are_kept(self):
+        # A native absolute path: /etc/hosts is not absolute on Windows.
+        absolute = str((self.job_root.parent / "outside.txt").resolve())
+
         plan = self.plan(
             "steps:\n"
             "  - id: first\n"
             "    tool: text\n"
             "    action: read\n"
-            "    arguments: {path: /etc/hosts}\n"
+            "    arguments:\n"
+            f"      path: '{absolute}'\n"
             "  - id: second\n"
             "    tool: text\n"
             "    action: write\n"
@@ -138,7 +142,7 @@ class BuildPlanTests(unittest.TestCase):
             "      content: $first.text\n"
         )
 
-        self.assertEqual(plan.steps[0].arguments["path"], "/etc/hosts")
+        self.assertEqual(plan.steps[0].arguments["path"], absolute)
         self.assertEqual(
             plan.steps[1].arguments["content"],
             "$first.text",
@@ -150,7 +154,7 @@ class BuildPlanTests(unittest.TestCase):
             "  - id: a\n"
             "    tool: text\n"
             "    action: read\n"
-            "    arguments: {path: /etc/hosts}\n"
+            "    arguments: {path: inputs/hosts.txt}\n"
             "  - id: b\n"
             "    tool: text\n"
             "    action: write\n"

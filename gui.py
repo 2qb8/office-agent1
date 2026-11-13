@@ -35,6 +35,7 @@ class OfficeAgentWindow:
         self.messages: queue.Queue = queue.Queue()
         self.running = False
         self.outputs: list[str] = []
+        self.poll_id: str | None = None
 
         self.instruction_var = tk.StringVar()
         self.output_var = tk.StringVar()
@@ -50,7 +51,7 @@ class OfficeAgentWindow:
 
         self.status_var.set(text(self.language, "ready"))
 
-        self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
 
     # ------------------------------------------------------------------
     # Layout
@@ -189,22 +190,29 @@ class OfficeAgentWindow:
             else None
         )
 
-        chosen = filedialog.askopenfilename(
-            title=text(self.language, "select_instruction"),
-            initialdir=initial,
-            filetypes=[
+        options: dict = {
+            "title": text(self.language, "select_instruction"),
+            "filetypes": [
                 (
                     text(self.language, "instruction_filter"),
                     "*.docx *.txt *.md",
                 ),
                 (text(self.language, "all_files"), "*.*"),
             ],
-        )
+        }
+
+        if initial:
+            options["initialdir"] = initial
+
+        chosen = filedialog.askopenfilename(**options)
 
         if not chosen:
             return
 
-        instruction = Path(chosen).expanduser()
+        self.use_instruction(Path(chosen).expanduser())
+
+    def use_instruction(self, instruction: Path) -> None:
+        """Fill the window for one instruction file, without a dialog."""
 
         self.instruction_var.set(str(instruction))
         self.output_var.set(str(default_output_dir(instruction)))
@@ -267,7 +275,7 @@ class OfficeAgentWindow:
             daemon=True,
         ).start()
 
-        self.root.after(120, self._poll)
+        self.poll_id = self.root.after(120, self._poll)
 
     def _work(self, instruction: Path) -> None:
         try:
@@ -299,7 +307,9 @@ class OfficeAgentWindow:
             pass
 
         if self.running:
-            self.root.after(120, self._poll)
+            self.poll_id = self.root.after(120, self._poll)
+        else:
+            self.poll_id = None
 
     def _handle(self, kind: str, payload, extra) -> None:
         if kind == "done":
@@ -396,6 +406,21 @@ class OfficeAgentWindow:
                 text(self.language, "cannot_open", error=exc)
             )
 
+    def close(self) -> None:
+        """Stop polling before the widgets disappear."""
+
+        self.running = False
+
+        if self.poll_id is not None:
+            try:
+                self.root.after_cancel(self.poll_id)
+            except Exception:
+                pass
+
+            self.poll_id = None
+
+        self.root.destroy()
+
     def _append(self, line: str) -> None:
         self.log.configure(state="normal")
         self.log.insert("end", line + "\n")
@@ -420,7 +445,29 @@ def main() -> int:
         )
         return 1
 
-    OfficeAgentWindow(root)
+    try:
+        OfficeAgentWindow(root)
+    except Exception:
+        import traceback
+
+        traceback.print_exc()
+
+        # A windowed build has no console, so show the failure itself.
+        try:
+            from tkinter import messagebox
+
+            messagebox.showerror(
+                APP_TITLE,
+                "The window could not start:\n\n"
+                + traceback.format_exc(),
+            )
+        except Exception:
+            pass
+
+        root.destroy()
+
+        return 1
+
     root.mainloop()
 
     return 0
