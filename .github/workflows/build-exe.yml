@@ -69,6 +69,14 @@ jobs:
       - name: Build executables
         run: python build_exe.py
 
+      - name: Verify both executables exist
+        shell: bash
+        run: |
+          ls -l dist
+          test -s dist/office-agent.exe
+          test -s dist/office-agent-gui.exe
+          cat dist/build-manifest.txt
+
       - name: Smoke test command line executable
         run: dist\office-agent.exe tools
 
@@ -78,7 +86,19 @@ jobs:
           path: |
             dist/office-agent.exe
             dist/office-agent-gui.exe
+            dist/build-manifest.txt
           if-no-files-found: error
+
+      - name: Publish build manifest
+        shell: bash
+        run: |
+          cp dist/build-manifest.txt build-manifest.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B ci-build
+          git add -f build-manifest.txt
+          git commit -m "Build manifest for ${GITHUB_SHA}" || true
+          git push --force origin ci-build
 
   release:
     needs: windows

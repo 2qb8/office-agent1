@@ -83,6 +83,11 @@ def main() -> int:
 
     for spec_name, name in BUILDS:
         if name == "office-agent-gui" and not has_tkinter():
+            if system == "Windows":
+                # The shipped Windows artifact must contain the desktop app.
+                print("Tkinter is missing, so office-agent-gui cannot be built.")
+                return 1
+
             print()
             print("Skipping the GUI build: Tkinter is not available.")
             print("  Debian/Ubuntu: sudo apt install python3-tk")
@@ -103,11 +108,47 @@ def main() -> int:
 
         built.append(artifact)
 
+    if system == "Windows":
+        missing = [
+            name
+            for name in ("office-agent.exe", "office-agent-gui.exe")
+            if not (ROOT / "dist" / name).is_file()
+        ]
+
+        if missing:
+            print(
+                "Missing expected executable(s): " + ", ".join(missing)
+            )
+            return 1
+
+    manifest = ROOT / "dist" / "build-manifest.txt"
+    manifest.write_text(
+        "\n".join(
+            [
+                f"platform: {system} {platform.machine()}",
+                f"python: {platform.python_version()}",
+                "",
+                *[
+                    f"{artifact.name}: "
+                    f"{artifact.stat().st_size} bytes "
+                    f"({artifact.stat().st_size / (1024 * 1024):.1f} MiB)"
+                    for artifact in built
+                ],
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
     print()
 
     for artifact in built:
         size_mb = artifact.stat().st_size / (1024 * 1024)
         print(f"Built: {artifact}  ({size_mb:.1f} MiB)")
+
+    if not built:
+        print("Nothing was built.")
+        return 1
 
     if built:
         print()
