@@ -106,9 +106,11 @@ class BuildPlanTests(unittest.TestCase):
 
         self.assertEqual(step.id, "step_1")
         self.assertEqual(step.description, "text.write")
+        # Compare resolved paths: Windows expands 8.3 short temp names on
+        # resolve(), so a string prefix check would fail there.
         self.assertTrue(
-            step.arguments["output_path"].startswith(
-                str(self.job_root)
+            Path(step.arguments["output_path"]).is_relative_to(
+                self.job_root.resolve()
             )
         )
 
