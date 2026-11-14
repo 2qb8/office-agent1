@@ -1,8 +1,8 @@
 Only present while the last Windows run failed; CI removes it
 once the tests pass again. No sign-in needed to read it.
 
-Run:    https://github.com/2qb8/office-agent1/actions/runs/43542787265
-Commit: 07e73fba03bfe718dd52fac96aab8f9b31376ba5
+Run:    https://github.com/2qb8/office-agent1/actions/runs/43543108223
+Commit: 43b8fa27c415cef3063d817df9ab6d5b1a3bb876
 
 Failing tests:
   (the suite did not report a test)
@@ -14,37 +14,37 @@ Last lines of output:
     if self._tk.getboolean(self._tk.call("info", "exists", self._name)):
                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 RuntimeError: main thread is not in main loop
-Exception ignored in: <function Variable.__del__ at 0x000001A4FF705EE0>
+Exception ignored in: <function Variable.__del__ at 0x000001F066961E40>
 Traceback (most recent call last):
   File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\tkinter\__init__.py", line 414, in __del__
     if self._tk.getboolean(self._tk.call("info", "exists", self._name)):
                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 RuntimeError: main thread is not in main loop
-Exception ignored in: <function Variable.__del__ at 0x000001A4FF705EE0>
+Exception ignored in: <function Variable.__del__ at 0x000001F066961E40>
 Traceback (most recent call last):
   File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\tkinter\__init__.py", line 414, in __del__
     if self._tk.getboolean(self._tk.call("info", "exists", self._name)):
                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 RuntimeError: main thread is not in main loop
-Exception ignored in: <function Variable.__del__ at 0x000001A4FF705EE0>
+Exception ignored in: <function Variable.__del__ at 0x000001F066961E40>
 Traceback (most recent call last):
   File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\tkinter\__init__.py", line 414, in __del__
     if self._tk.getboolean(self._tk.call("info", "exists", self._name)):
                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 RuntimeError: main thread is not in main loop
-Exception ignored in: <function Variable.__del__ at 0x000001A4FF705EE0>
+Exception ignored in: <function Variable.__del__ at 0x000001F066961E40>
 Traceback (most recent call last):
   File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\tkinter\__init__.py", line 414, in __del__
     if self._tk.getboolean(self._tk.call("info", "exists", self._name)):
                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 RuntimeError: main thread is not in main loop
-Exception ignored in: <function Variable.__del__ at 0x000001A4FF705EE0>
+Exception ignored in: <function Variable.__del__ at 0x000001F066961E40>
 Traceback (most recent call last):
   File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\tkinter\__init__.py", line 414, in __del__
     if self._tk.getboolean(self._tk.call("info", "exists", self._name)):
                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 RuntimeError: main thread is not in main loop
-Exception ignored in: <function Image.__del__ at 0x000001A4FF7739C0>
+Exception ignored in: <function Image.__del__ at 0x000001F0669D3920>
 Traceback (most recent call last):
   File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\tkinter\__init__.py", line 4119, in __del__
     self.tk.call('image', 'delete', self.name)
