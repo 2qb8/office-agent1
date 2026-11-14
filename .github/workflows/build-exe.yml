@@ -70,6 +70,9 @@ jobs:
             echo "Suite result:"
             grep -E "^(Ran |FAILED|OK)" tests.log || true
             echo
+            echo "Last test lines before the end:"
+            grep -E "(^test_|^FAIL:|^ERROR:|^AssertionError|^Ran )" tests.log | tail -n 25 || true
+            echo
             echo "Last lines of output:"
             tail -n 40 tests.log || true
           } > docs/test-failures.txt
@@ -81,7 +84,7 @@ jobs:
 
       - name: Open the desktop window
         run: |
-          python -c "import tkinter, gui; root = tkinter.Tk(); window = gui.OfficeAgentWindow(root); root.update_idletasks(); print('window ok', root.winfo_width(), root.winfo_height()); root.destroy()"
+          python -c "import tkinter, gui; root = tkinter.Tk(); window = gui.OfficeAgentWindow(root); root.update_idletasks(); print('window ok', root.winfo_width(), root.winfo_height()); window.close()"
 
       - name: Capture a screenshot of the window
         continue-on-error: true

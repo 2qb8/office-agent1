@@ -977,7 +977,34 @@ class OfficeAgentWindow:
 
             self.poll_id = None
 
-        self.root.destroy()
+        self._release_tk_objects()
+
+        try:
+            self.root.destroy()
+        except tk.TclError:
+            pass  # already gone
+
+    def _release_tk_objects(self) -> None:
+        """Drop Tk variables and images while the interpreter still lives.
+
+        Left alive, they are finalised at interpreter exit, after Tk has
+        gone: that prints noise, and from the wrong thread it aborts the
+        process with Tcl_AsyncDelete.
+        """
+
+        self.icon = None
+
+        for name in (
+            "instruction_var",
+            "output_var",
+            "status_var",
+            "provider_var",
+            "model_var",
+            "endpoint_var",
+            "api_key_var",
+            "ai_status_var",
+        ):
+            setattr(self, name, None)
 
     def _append(self, line: str, tag: str | None) -> None:
         self.log.configure(state="normal")

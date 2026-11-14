@@ -77,7 +77,8 @@ def main() -> int:
 
     print(f"saved {target} ({image.width}x{image.height})")
 
-    root.destroy()
+    # close() drops the Tk variables and the icon while Tk is still alive.
+    window.close()
 
     return 0
 

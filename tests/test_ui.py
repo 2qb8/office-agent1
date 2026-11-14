@@ -682,10 +682,16 @@ class GuiWindowTests(unittest.TestCase):
         if worker is not None and worker.is_alive():
             worker.join(10.0)
 
+        # close() releases the Tk variables and the window icon before the
+        # interpreter goes away, which is what crashed on Windows when they
+        # were finalised after Tk had been destroyed.
         try:
-            self.root.destroy()
+            self.window.close()
         except Exception:
-            pass
+            try:
+                self.root.destroy()
+            except Exception:
+                pass
 
     def test_instruction_fills_the_output_folder(self):
         with tempfile.TemporaryDirectory() as directory:
