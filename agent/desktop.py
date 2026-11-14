@@ -9,10 +9,27 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from agent import ai_config
 from agent.registry import build_registry
 from agent.runtime import AgentRuntime
 from agent.spec import SpecError
 from agent.ui import instruction_job_dir
+
+
+def test_ai_connection(
+    values: dict[str, str],
+) -> tuple[bool, str]:
+    """Send one tiny request to the selected model; never raises.
+
+    This is what the window's Test connection button runs, through the real
+    HTTP client, so it reports what the planner would actually see.
+    """
+
+    try:
+        return ai_config.test_connection(ai_config.from_values(values))
+
+    except Exception as exc:  # reported in the window, never a crash
+        return False, str(exc)
 
 
 def run_instruction(

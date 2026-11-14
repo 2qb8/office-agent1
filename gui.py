@@ -12,7 +12,7 @@ from pathlib import Path
 from tkinter import filedialog, font as tkfont, ttk
 
 from agent import __version__, ai_config
-from agent.desktop import run_instruction
+from agent.desktop import run_instruction, test_ai_connection
 from agent.llm_factory import PROVIDERS
 from agent.ui import (
     APP_TITLE,
@@ -727,15 +727,12 @@ class OfficeAgentWindow:
 
         threading.Thread(
             target=self._test_ai,
-            args=(ai_config.from_values(values),),
+            args=(values,),
             daemon=True,
         ).start()
 
-    def _test_ai(self, config) -> None:
-        try:
-            ok, detail = ai_config.test_connection(config)
-        except Exception as exc:  # shown in the window, never a crash
-            ok, detail = False, str(exc)
+    def _test_ai(self, values: dict[str, str]) -> None:
+        ok, detail = test_ai_connection(values)
 
         self.messages.put(("ai_ok" if ok else "ai_fail", detail, None))
 

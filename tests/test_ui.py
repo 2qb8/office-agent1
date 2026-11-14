@@ -11,6 +11,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
+import requests
 from docx import Document
 
 from agent import ai_config, desktop, ui
@@ -150,6 +151,22 @@ class UnusedPlanner:
         raise AssertionError(
             "the AI planner must not run when the instruction has a spec"
         )
+
+
+class FakeHttpResponse:
+    """The shape requests.post returns, without a socket."""
+
+    def __init__(self, status_code=200, payload=None, text=""):
+        self.status_code = status_code
+        self._payload = payload if payload is not None else {}
+        self.text = text or json.dumps(self._payload)
+
+    def json(self):
+        return self._payload
+
+
+def chat_reply(content: str = "OK") -> dict:
+    return {"choices": [{"message": {"content": content}}]}
 
 
 def prompt_text(prompt) -> str:
@@ -481,6 +498,59 @@ class DesktopRunPathTests(unittest.TestCase):
         self.assertEqual(outputs, [])
 
 
+class ConnectionTestTests(unittest.TestCase):
+    """The AI panel's Test connection, through the real HTTP client."""
+
+    def test_a_working_reply_reports_the_model_output(self):
+        with mock.patch(
+            "agent.llm.requests.post",
+            return_value=FakeHttpResponse(200, chat_reply("OK")),
+        ) as post:
+            ok, detail = desktop.test_ai_connection(OPENAI_ENV)
+
+        self.assertTrue(ok)
+        self.assertEqual(detail, "OK")
+
+        url = post.call_args.args[0]
+        options = post.call_args.kwargs
+
+        self.assertEqual(
+            url, "https://api.openai.com/v1/chat/completions"
+        )
+        self.assertEqual(
+            options["headers"]["Authorization"],
+            "Bearer test-key",
+        )
+        self.assertEqual(options["json"]["model"], "gpt-4o-mini")
+        self.assertEqual(options["json"]["max_tokens"], 8)
+
+    def test_a_rejected_key_reports_the_http_status(self):
+        body = '{"error": {"message": "Incorrect API key provided"}}'
+
+        with mock.patch(
+            "agent.llm.requests.post",
+            return_value=FakeHttpResponse(401, text=body),
+        ):
+            ok, detail = desktop.test_ai_connection(OPENAI_ENV)
+
+        self.assertFalse(ok)
+        self.assertIn("HTTP 401", detail)
+        self.assertIn("Incorrect API key", detail)
+
+    def test_an_unreachable_endpoint_reports_the_network_error(self):
+        with mock.patch(
+            "agent.llm.requests.post",
+            side_effect=requests.exceptions.ConnectionError(
+                "getaddrinfo failed"
+            ),
+        ):
+            ok, detail = desktop.test_ai_connection(OPENAI_ENV)
+
+        self.assertFalse(ok)
+        self.assertIn("network error", detail)
+        self.assertIn("getaddrinfo failed", detail)
+
+
 class ConfigCheckingFactoryTests(unittest.TestCase):
     def test_the_factory_refuses_a_client_for_other_settings(self):
         """Without this the window tests could pass on a broken wiring."""
@@ -637,6 +707,95 @@ class GuiWindowTests(unittest.TestCase):
         self.window.provider_var.set("OpenAI")
         self.window.on_provider_change()
         self.window.api_key_var.set("test-key")
+
+    def _press_test(self, timeout: float = 20.0) -> bool:
+        """Click Test connection and wait for the worker's reply."""
+
+        self.window.test_connection()
+
+        deadline = time.time() + timeout
+
+        while time.time() < deadline:
+            self.root.update()
+
+            if not self.window.testing:
+                return True
+
+            time.sleep(0.02)
+
+        return False
+
+    def test_connection_button_reports_a_working_reply(self):
+        self._use_openai()
+
+        with mock.patch(
+            "agent.llm.requests.post",
+            return_value=FakeHttpResponse(200, chat_reply("OK")),
+        ):
+            self.assertTrue(
+                self._press_test(),
+                "the connection test never finished",
+            )
+
+        self.assertEqual(
+            self.window.ai_status_var.get(),
+            ui.text(self.window.language, "ai_ok", detail="OK"),
+        )
+        self.assertEqual(
+            str(self.window.test_button.cget("state")), "normal"
+        )
+
+    def test_connection_button_reports_a_rejected_key(self):
+        self._use_openai()
+
+        body = '{"error": {"message": "Incorrect API key provided"}}'
+
+        with mock.patch(
+            "agent.llm.requests.post",
+            return_value=FakeHttpResponse(401, text=body),
+        ):
+            self.assertTrue(
+                self._press_test(),
+                "the connection test never finished",
+            )
+
+        status = self.window.ai_status_var.get()
+
+        self.assertTrue(
+            status.startswith(
+                ui.text(
+                    self.window.language,
+                    "ai_fail",
+                    detail="HTTP 401",
+                )
+            ),
+            status,
+        )
+        self.assertIn("Incorrect API key", status)
+
+    def test_connection_button_reports_an_unreachable_endpoint(self):
+        self._use_openai()
+
+        with mock.patch(
+            "agent.llm.requests.post",
+            side_effect=requests.exceptions.ConnectionError(
+                "getaddrinfo failed"
+            ),
+        ):
+            self.assertTrue(
+                self._press_test(),
+                "the connection test never finished",
+            )
+
+        status = self.window.ai_status_var.get()
+
+        self.assertTrue(
+            status.startswith(
+                ui.text(self.window.language, "ai_fail", detail="")
+            ),
+            status,
+        )
+        self.assertIn("network error", status)
 
     def test_run_plans_prose_with_the_configured_model(self):
         job = Path(self._settings.name) / "ai-job"
