@@ -57,8 +57,8 @@ def _enable_dpi_awareness() -> None:
 
     Without this Windows renders the window at 96 dpi and scales the bitmap
     up, which is why untweaked Tk apps look blurry on a 150% screen. Tk
-    picks the real scaling up once the process is aware, and _center() keeps
-    the window the same physical size.
+    picks the real scaling up once the process is aware, and _fit() then
+    sizes the window from the real pixel metrics.
     """
 
     if not sys.platform.startswith("win"):
@@ -188,7 +188,7 @@ class OfficeAgentWindow:
 
         self._build_header()
 
-        body = ttk.Frame(self.root, style="Body.TFrame", padding=(18, 12, 18, 6))
+        body = ttk.Frame(self.root, style="Body.TFrame", padding=(18, 10, 18, 4))
         body.pack(fill="both", expand=True)
         body.columnconfigure(0, weight=1)
         body.rowconfigure(2, weight=1)
@@ -199,10 +199,7 @@ class OfficeAgentWindow:
         self._build_footer(body)
 
         self._set_icon()
-        # Stays inside a 1024x768 desktop, which is what a small laptop and
-        # the CI runner have: the two footer rows fit by keeping the log
-        # eight lines tall.
-        self._center(900, 740)
+        self._fit()
 
     def _build_header(self) -> None:
         header = tk.Frame(self.root, bg=HEADER_BG)
@@ -253,7 +250,7 @@ class OfficeAgentWindow:
         self.instruction_label = ttk.Label(
             self.document_card, style="Path.TLabel"
         )
-        self.instruction_label.grid(row=0, column=0, sticky="w", pady=(4, 0))
+        self.instruction_label.grid(row=0, column=0, sticky="w", pady=(2, 0))
 
         self.instruction_entry = ttk.Entry(
             self.document_card,
@@ -261,14 +258,14 @@ class OfficeAgentWindow:
             font=(self.family, 10),
         )
         self.instruction_entry.grid(
-            row=0, column=1, sticky="ew", padx=(12, 8), pady=(4, 0)
+            row=0, column=1, sticky="ew", padx=(12, 8), pady=(2, 0)
         )
 
         self.browse_button = ttk.Button(
             self.document_card,
             command=self.choose_instruction,
         )
-        self.browse_button.grid(row=0, column=2, sticky="ew", pady=(4, 0))
+        self.browse_button.grid(row=0, column=2, sticky="ew", pady=(2, 0))
 
         self.instruction_hint = ttk.Label(
             self.document_card, style="Muted.TLabel"
@@ -280,7 +277,7 @@ class OfficeAgentWindow:
         self.output_label = ttk.Label(
             self.document_card, style="Path.TLabel"
         )
-        self.output_label.grid(row=2, column=0, sticky="w", pady=(10, 0))
+        self.output_label.grid(row=2, column=0, sticky="w", pady=(6, 0))
 
         self.output_value = ttk.Label(
             self.document_card,
@@ -294,13 +291,13 @@ class OfficeAgentWindow:
             columnspan=2,
             sticky="ew",
             padx=(12, 0),
-            pady=(10, 0),
+            pady=(6, 0),
         )
 
         self.language_label = ttk.Label(
             self.document_card, style="Path.TLabel"
         )
-        self.language_label.grid(row=3, column=0, sticky="w", pady=(10, 0))
+        self.language_label.grid(row=3, column=0, sticky="w", pady=(6, 0))
 
         self.language_combo = ttk.Combobox(
             self.document_card,
@@ -310,7 +307,7 @@ class OfficeAgentWindow:
             font=(self.family, 10),
         )
         self.language_combo.grid(
-            row=3, column=1, sticky="w", padx=(12, 0), pady=(10, 0)
+            row=3, column=1, sticky="w", padx=(12, 0), pady=(6, 0)
         )
         self.language_combo.bind("<<ComboboxSelected>>", self.on_language)
 
@@ -375,7 +372,7 @@ class OfficeAgentWindow:
         self.endpoint_label = ttk.Label(
             self.ai_card, style="Path.TLabel"
         )
-        self.endpoint_label.grid(row=1, column=0, sticky="w", pady=(8, 0))
+        self.endpoint_label.grid(row=1, column=0, sticky="w", pady=(5, 0))
 
         self.endpoint_entry = ttk.Entry(
             self.ai_card,
@@ -384,12 +381,12 @@ class OfficeAgentWindow:
         )
         self.endpoint_entry.grid(
             row=1, column=1, columnspan=3, sticky="ew",
-            padx=(12, 0), pady=(8, 0),
+            padx=(12, 0), pady=(5, 0),
         )
         self.endpoint_entry.bind("<FocusOut>", self._on_ai_edit)
 
         self.key_label = ttk.Label(self.ai_card, style="Path.TLabel")
-        self.key_label.grid(row=2, column=0, sticky="w", pady=(8, 0))
+        self.key_label.grid(row=2, column=0, sticky="w", pady=(5, 0))
 
         self.key_entry = ttk.Entry(
             self.ai_card,
@@ -399,7 +396,7 @@ class OfficeAgentWindow:
         )
         self.key_entry.grid(
             row=2, column=1, columnspan=3, sticky="ew",
-            padx=(12, 12), pady=(8, 0),
+            padx=(12, 12), pady=(5, 0),
         )
         self.key_entry.bind("<FocusOut>", self._on_ai_edit)
 
@@ -408,7 +405,7 @@ class OfficeAgentWindow:
             command=self.test_connection,
             width=17,
         )
-        self.test_button.grid(row=2, column=4, sticky="e", pady=(8, 0))
+        self.test_button.grid(row=2, column=4, sticky="e", pady=(5, 0))
 
         self.ai_status_label = ttk.Label(
             self.ai_card,
@@ -417,7 +414,7 @@ class OfficeAgentWindow:
             wraplength=760,
         )
         self.ai_status_label.grid(
-            row=3, column=0, columnspan=5, sticky="w", pady=(10, 0)
+            row=3, column=0, columnspan=5, sticky="w", pady=(6, 0)
         )
 
         self.ai_hint_label = ttk.Label(
@@ -429,7 +426,7 @@ class OfficeAgentWindow:
         self.log_card = ttk.LabelFrame(
             parent,
             style="Card.TLabelframe",
-            padding=(10, 6, 10, 10),
+            padding=(10, 4, 10, 8),
         )
         self.log_card.grid(row=2, column=0, sticky="nsew", pady=(12, 0))
         self.log_card.columnconfigure(0, weight=1)
@@ -497,7 +494,7 @@ class OfficeAgentWindow:
             textvariable=self.status_var,
             style="Status.TLabel",
         )
-        self.status_label.grid(row=3, column=0, sticky="w", pady=(8, 4))
+        self.status_label.grid(row=3, column=0, sticky="w", pady=(6, 2))
 
         footer = ttk.Frame(parent, style="Body.TFrame")
         footer.grid(row=4, column=0, sticky="ew")
@@ -565,7 +562,7 @@ class OfficeAgentWindow:
             columnspan=2,
             sticky="w",
             padx=(12, 0),
-            pady=(10, 0),
+            pady=(6, 0),
         )
 
     def _mono_family(self) -> str:
@@ -599,19 +596,7 @@ class OfficeAgentWindow:
             except tk.TclError:
                 continue
 
-    def _ui_scale(self) -> float:
-        """1.0 at 96 dpi, 1.5 at 144 dpi, so the window keeps its real size."""
-
-        try:
-            return max(1.0, min(2.0, self.root.winfo_fpixels("1i") / 96.0))
-        except tk.TclError:
-            return 1.0
-
-    def _center(self, width: int, height: int) -> None:
-        scale = self._ui_scale()
-
-        width, height = int(width * scale), int(height * scale)
-
+    def _place(self, width: int, height: int) -> None:
         try:
             screen_width = self.root.winfo_screenwidth()
             screen_height = self.root.winfo_screenheight()
@@ -622,6 +607,30 @@ class OfficeAgentWindow:
             self.root.geometry(f"{width}x{height}+{x}+{y}")
         except tk.TclError:
             self.root.geometry(f"{width}x{height}")
+
+    def _fit(self) -> None:
+        """Size the window to its content, capped by the screen.
+
+        A fixed 900x740 silently clipped the footer the first time a row was
+        added to it. Sizing from the requested geometry keeps the window
+        right as rows come and go, and the cap stops it running off the
+        bottom of a small display.
+        """
+
+        try:
+            self.root.update_idletasks()
+
+            width = max(900, self.root.winfo_reqwidth())
+            height = max(740, self.root.winfo_reqheight())
+
+            available = self.root.winfo_screenheight() - 60
+
+            if available > 0:
+                height = min(height, available)
+        except tk.TclError:
+            width, height = 900, 740
+
+        self._place(width, height)
 
     def _apply_language(self) -> None:
         self.root.title(f"{APP_TITLE} {__version__}")
