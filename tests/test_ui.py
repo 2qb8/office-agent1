@@ -701,6 +701,28 @@ class SelfTestTests(unittest.TestCase):
             report,
         )
 
+    def test_a_job_folder_is_accepted_the_way_ci_passes_it(self):
+        write_docx(
+            self.job / "instruction.docx",
+            SPEC.strip().splitlines(),
+        )
+
+        with redirect_stdout(io.StringIO()):
+            code = desktop.self_test(self.job)
+
+        self.assertEqual(code, 0)
+        self.assertTrue((self.job / "self-test.txt").is_file())
+
+    def test_a_folder_without_an_instruction_reports_failure(self):
+        with redirect_stdout(io.StringIO()):
+            code = desktop.self_test(self.job)
+
+        self.assertEqual(code, 1)
+        self.assertIn(
+            "result: no-instruction",
+            (self.job / "self-test.txt").read_text(encoding="utf-8"),
+        )
+
     def test_a_plain_prose_instruction_without_ai_reports_failure(self):
         instruction = write_docx(
             self.job / "instruction.docx",

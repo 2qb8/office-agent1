@@ -14,7 +14,7 @@ from agent.joblock import JobBusyError, JobLock
 from agent.registry import build_registry
 from agent.runtime import AgentRuntime
 from agent.spec import SpecError
-from agent.ui import describe_state, instruction_job_dir
+from agent.ui import describe_state, instruction_job_dir, is_instruction_file
 
 
 def test_ai_connection(
@@ -124,14 +124,48 @@ def run_instruction(
     return execute_plan(runtime, payload)
 
 
-def self_test(instruction: Path) -> int:
+def _instruction_in(target: Path) -> Path | None:
+    """The instruction file inside a job folder, if there is one."""
+
+    if target.is_file():
+        return target
+
+    if not target.is_dir():
+        return None
+
+    for candidate in sorted(target.iterdir()):
+        if candidate.is_file() and is_instruction_file(candidate):
+            return candidate
+
+    return None
+
+
+def self_test(target: Path) -> int:
     """Run one job with no window and report through the exit code.
 
     The windowed executable has no console, so this is how CI proves the
     frozen bundle can really run a job: bundled assets, the docx template,
     openpyxl's data files, Tk imports and the bootloader are all exercised.
-    The details land in ``self-test.txt`` beside the instruction.
+
+    ``target`` is an instruction file or the job folder holding one; the
+    details land in ``self-test.txt`` in that job folder.
     """
+
+    folder = Path(target).expanduser()
+
+    instruction = _instruction_in(folder)
+
+    if instruction is None:
+        try:
+            (folder / "self-test.txt").write_text(
+                "result: no-instruction\n"
+                f"looked in: {folder}\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
+
+        return 1
 
     kind, payload, outputs = run_instruction(instruction)
 
