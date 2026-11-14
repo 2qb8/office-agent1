@@ -182,13 +182,13 @@ class OfficeAgentWindow:
 
     def _build(self) -> None:
         self.root.configure(bg=WINDOW_BG)
-        self.root.minsize(860, 780)
+        self.root.minsize(860, 700)
 
         self._setup_style()
 
         self._build_header()
 
-        body = ttk.Frame(self.root, style="Body.TFrame", padding=(18, 14, 18, 8))
+        body = ttk.Frame(self.root, style="Body.TFrame", padding=(18, 12, 18, 6))
         body.pack(fill="both", expand=True)
         body.columnconfigure(0, weight=1)
         body.rowconfigure(2, weight=1)
@@ -199,9 +199,10 @@ class OfficeAgentWindow:
         self._build_footer(body)
 
         self._set_icon()
-        # Tall enough for both footer rows: the review checkbox and the
-        # Copy details / Open run log pair sit below Run.
-        self._center(900, 830)
+        # Stays inside a 1024x768 desktop, which is what a small laptop and
+        # the CI runner have: the two footer rows fit by keeping the log
+        # eight lines tall.
+        self._center(900, 740)
 
     def _build_header(self) -> None:
         header = tk.Frame(self.root, bg=HEADER_BG)
@@ -438,7 +439,7 @@ class OfficeAgentWindow:
 
         self.log = tk.Text(
             self.log_card,
-            height=10,
+            height=8,
             wrap="word",
             state="disabled",
             borderwidth=0,
@@ -478,7 +479,7 @@ class OfficeAgentWindow:
             textvariable=self.status_var,
             style="Status.TLabel",
         )
-        self.status_label.grid(row=3, column=0, sticky="w", pady=(10, 6))
+        self.status_label.grid(row=3, column=0, sticky="w", pady=(8, 4))
 
         footer = ttk.Frame(parent, style="Body.TFrame")
         footer.grid(row=4, column=0, sticky="ew")
@@ -541,7 +542,7 @@ class OfficeAgentWindow:
             command=self._on_review_toggle,
         )
         self.review_check.grid(
-            row=1, column=0, columnspan=2, sticky="w", pady=(10, 0)
+            row=1, column=0, columnspan=2, sticky="w", pady=(8, 0)
         )
 
         self.copy_button = ttk.Button(
@@ -549,11 +550,11 @@ class OfficeAgentWindow:
             command=self.copy_details,
             state="disabled",
         )
-        self.copy_button.grid(row=1, column=3, sticky="e", pady=(10, 0))
+        self.copy_button.grid(row=1, column=3, sticky="e", pady=(8, 0))
 
         self.log_button = ttk.Button(footer, command=self.open_run_log)
         self.log_button.grid(
-            row=1, column=4, sticky="e", padx=(8, 0), pady=(10, 0)
+            row=1, column=4, sticky="e", padx=(8, 0), pady=(8, 0)
         )
 
     def _mono_family(self) -> str:
