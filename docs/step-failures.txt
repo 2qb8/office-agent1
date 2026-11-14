@@ -1,8 +1,8 @@
 Only present while the last Windows run failed; CI removes it
 once the run is green again. No sign-in needed to read this.
 
-Run:    https://github.com/2qb8/office-agent1/actions/runs/43547002561
-Commit: bb9ed699631a2b3d66c28d1c1358a96f3eb399b2
+Run:    https://github.com/2qb8/office-agent1/actions/runs/43547352856
+Commit: 8168c26ccdd1b3d7d510d08cce57b62323618373
 
 Steps:
   install=success
@@ -21,9 +21,10 @@ Steps:
 
 dist/:
 total 57085
--rw-r--r-- 1 runneradmin 197121      138 Nov 14 02:35 build-manifest.txt
--rwxr-xr-x 1 runneradmin 197121 30807722 Nov 14 02:35 office-agent-gui.exe
--rwxr-xr-x 1 runneradmin 197121 27642339 Nov 14 02:35 office-agent.exe
+-rw-r--r-- 1 runneradmin 197121      138 Nov 14 02:39 build-manifest.txt
+-rwxr-xr-x 1 runneradmin 197121 30809625 Nov 14 02:39 office-agent-gui.exe
+-rwxr-xr-x 1 runneradmin 197121 27643215 Nov 14 02:38 office-agent.exe
 
 Self-test report:
   (none)
+  (no crash file)
