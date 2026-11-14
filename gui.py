@@ -320,7 +320,7 @@ class OfficeAgentWindow:
             font=(self.family, 10),
         )
         self.key_entry.grid(
-            row=2, column=1, columnspan=2, sticky="ew",
+            row=2, column=1, columnspan=3, sticky="ew",
             padx=(12, 12), pady=(8, 0),
         )
         self.key_entry.bind("<FocusOut>", self._on_ai_edit)
@@ -330,7 +330,7 @@ class OfficeAgentWindow:
             command=self.test_connection,
             width=17,
         )
-        self.test_button.grid(row=2, column=3, sticky="ew", pady=(8, 0))
+        self.test_button.grid(row=2, column=4, sticky="e", pady=(8, 0))
 
         self.ai_status_label = ttk.Label(
             self.ai_card,
@@ -339,13 +339,13 @@ class OfficeAgentWindow:
             wraplength=760,
         )
         self.ai_status_label.grid(
-            row=3, column=0, columnspan=4, sticky="w", pady=(10, 0)
+            row=3, column=0, columnspan=5, sticky="w", pady=(10, 0)
         )
 
         self.ai_hint_label = ttk.Label(
             self.ai_card, style="Muted.TLabel", wraplength=760
         )
-        self.ai_hint_label.grid(row=4, column=0, columnspan=4, sticky="w")
+        self.ai_hint_label.grid(row=4, column=0, columnspan=5, sticky="w")
 
     def _build_log(self, parent: ttk.Frame) -> None:
         self.log_card = ttk.LabelFrame(
