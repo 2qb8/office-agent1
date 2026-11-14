@@ -136,16 +136,41 @@ jobs:
           $job = Join-Path $env:TEMP "office-agent-selftest"
           Remove-Item -Recurse -Force $job -ErrorAction SilentlyContinue
           Copy-Item examples\sales-pack $job -Recurse
+
+          "--- command line run of the same job, so a bad job is not taken for a bad bundle"
+          & dist\office-agent.exe run $job
+          "command line exit code: $LASTEXITCODE"
+
+          "--- desktop executable self-test"
+          $log = Join-Path $env:TEMP "office-agent-selftest.log"
+          Remove-Item -Recurse -Force (Join-Path $job "output") -ErrorAction SilentlyContinue
           $watch = [Diagnostics.Stopwatch]::StartNew()
-          $process = Start-Process -FilePath dist\office-agent-gui.exe `
-            -ArgumentList @("--self-test", $job) -Wait -PassThru
+          $process = Start-Process -FilePath (Resolve-Path dist\office-agent-gui.exe) `
+            -ArgumentList @("--self-test", "`"$job`"") -Wait -PassThru `
+            -RedirectStandardOutput $log -RedirectStandardError "$log.err"
           $watch.Stop()
-          "exit code: $($process.ExitCode) after $([math]::Round($watch.Elapsed.TotalSeconds, 1))s"
-          Copy-Item (Join-Path $job "self-test.txt") dist\self-test.txt -ErrorAction SilentlyContinue
-          Get-Content (Join-Path $job "self-test.txt") -ErrorAction SilentlyContinue
+          "desktop exit code: $($process.ExitCode) after $([math]::Round($watch.Elapsed.TotalSeconds, 1))s"
+
+          foreach ($name in @("self-test.txt", "self-test-crash.txt")) {
+            $path = Join-Path $job $name
+            if (Test-Path $path) {
+              "--- $name"
+              Get-Content $path
+              Copy-Item $path "dist\$name" -Force
+            }
+          }
+
+          foreach ($path in @($log, "$log.err")) {
+            if ((Test-Path $path) -and (Get-Item $path).Length -gt 0) {
+              "--- $path"
+              Get-Content $path
+            }
+          }
+
           if ($process.ExitCode -ne 0) {
             throw "office-agent-gui.exe --self-test failed with $($process.ExitCode)."
           }
+
           $created = @(Get-ChildItem (Join-Path $job "output") -File -Recurse -ErrorAction SilentlyContinue)
           if ($created.Count -eq 0) {
             throw "The desktop executable ran but produced no output files."
@@ -161,6 +186,7 @@ jobs:
             dist/office-agent-gui.exe
             dist/build-manifest.txt
             dist/self-test.txt
+            dist/self-test-crash.txt
             docs/window.png
             docs/window-diff.png
           if-no-files-found: error
@@ -303,6 +329,7 @@ jobs:
             echo
             echo "Self-test report:"
             cat dist/self-test.txt 2>/dev/null || echo "  (none)"
+            cat dist/self-test-crash.txt 2>/dev/null || echo "  (no crash file)"
           } > docs/step-failures.txt
           cat docs/step-failures.txt
           git config user.name "github-actions[bot]"

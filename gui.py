@@ -1555,7 +1555,24 @@ def main() -> int:
         if len(argv) < 2:
             return 2
 
-        return self_test(Path(argv[1]))
+        job = Path(argv[1])
+
+        try:
+            return self_test(job)
+        except BaseException:
+            # There is no console in the windowed build, so leave the
+            # traceback where CI (and a user) can read it.
+            import traceback
+
+            try:
+                (job / "self-test-crash.txt").write_text(
+                    traceback.format_exc(),
+                    encoding="utf-8",
+                )
+            except OSError:
+                pass
+
+            return 1
 
     _enable_dpi_awareness()
 
