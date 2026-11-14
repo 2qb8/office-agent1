@@ -262,7 +262,7 @@ class OfficeAgentWindow:
             padding=(14, 8, 14, 10),
         )
         self.ai_card.grid(row=1, column=0, sticky="ew", pady=(12, 0))
-        self.ai_card.columnconfigure(1, weight=1)
+        self.ai_card.columnconfigure(3, weight=1)
 
         self.provider_label = ttk.Label(
             self.ai_card, style="Path.TLabel"
@@ -444,6 +444,10 @@ class OfficeAgentWindow:
             length=170,
         )
         self.progress.grid(row=0, column=3, sticky="e")
+
+        # Only shown while a job runs; an idle indeterminate bar is just a
+        # stray coloured block.
+        self.progress.grid_remove()
 
     def _mono_family(self) -> str:
         available = set(tkfont.families(self.root))
@@ -929,9 +933,11 @@ class OfficeAgentWindow:
         )
 
         if running:
+            self.progress.grid()
             self.progress.start(14)
         else:
             self.progress.stop()
+            self.progress.grid_remove()
 
     # ------------------------------------------------------------------
     # Output
