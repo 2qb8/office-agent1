@@ -26,10 +26,15 @@ def test_ai_connection(
     """
 
     try:
-        return ai_config.test_connection(ai_config.from_values(values))
+        ok, detail = ai_config.test_connection(
+            ai_config.from_values(values)
+        )
 
     except Exception as exc:  # reported in the window, never a crash
         return False, str(exc)
+
+    # The panel shows one line; client errors can carry newlines.
+    return ok, " ".join(detail.split())
 
 
 def run_instruction(

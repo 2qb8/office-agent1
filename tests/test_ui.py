@@ -536,6 +536,7 @@ class ConnectionTestTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("HTTP 401", detail)
         self.assertIn("Incorrect API key", detail)
+        self.assertNotIn("\n", detail)
 
     def test_an_unreachable_endpoint_reports_the_network_error(self):
         with mock.patch(
@@ -549,6 +550,7 @@ class ConnectionTestTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("network error", detail)
         self.assertIn("getaddrinfo failed", detail)
+        self.assertNotIn("\n", detail)
 
 
 class ConfigCheckingFactoryTests(unittest.TestCase):
@@ -761,16 +763,15 @@ class GuiWindowTests(unittest.TestCase):
 
         status = self.window.ai_status_var.get()
 
+        # The client wraps model errors, so only the template prefix and the
+        # facts that matter are pinned here.
         self.assertTrue(
             status.startswith(
-                ui.text(
-                    self.window.language,
-                    "ai_fail",
-                    detail="HTTP 401",
-                )
+                ui.text(self.window.language, "ai_fail", detail="")
             ),
             status,
         )
+        self.assertIn("HTTP 401", status)
         self.assertIn("Incorrect API key", status)
 
     def test_connection_button_reports_an_unreachable_endpoint(self):
