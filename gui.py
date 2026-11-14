@@ -186,7 +186,7 @@ class OfficeAgentWindow:
 
     def _build(self) -> None:
         self.root.configure(bg=WINDOW_BG)
-        self.root.minsize(860, 700)
+        self.root.minsize(980, 700)
 
         self._setup_style()
 
@@ -620,7 +620,10 @@ class OfficeAgentWindow:
         try:
             self.root.update_idletasks()
 
-            width = max(900, self.root.winfo_reqwidth())
+            # 980 keeps the Recent menu, Test connection and the log's
+            # scrollbar clear of the right edge; requested width wins if a
+            # translation makes a label wider.
+            width = max(980, self.root.winfo_reqwidth())
             height = max(740, self.root.winfo_reqheight())
 
             screen_width = self.root.winfo_screenwidth()
@@ -632,7 +635,7 @@ class OfficeAgentWindow:
             if available > 0:
                 height = min(height, available)
         except tk.TclError:
-            width, height = 900, 740
+            width, height = 980, 740
 
         self._place(width, height)
 
