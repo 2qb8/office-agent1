@@ -361,6 +361,11 @@ machine. The Windows build sets `OFFICE_AGENT_REQUIRE_GUI=1`, which turns
 those skips into failures: a released executable cannot pass CI without
 the window having been built, filled in and run.
 
+Action logs need a signed-in account, so a failed Windows run also commits
+`docs/test-failures.txt` to `main`: it lists the failing test names, the
+suite result and the run URL, and the next successful run deletes it. If
+that file is absent, the last build passed.
+
 `tests/test_actions.py` has one test per advertised tool action, plus a
 meta-test that fails when an action has no test or is not wired into the
 tool's `run()`. `tests/test_ui.py` covers the desktop app's translations,

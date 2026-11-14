@@ -6,6 +6,7 @@ opening a window.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,40 @@ from agent.registry import build_registry
 from agent.runtime import AgentRuntime
 from agent.spec import SpecError
 from agent.ui import instruction_job_dir
+
+
+FAILURE_WRAPPER = "All configured LLM models failed:"
+
+# "gpt-4o-mini: HTTP 401: ...", "openrouter/model: HTTP 500: ..." and
+# "gpt-4o-mini: gpt-4o-mini failed after 1 attempts: ..."
+_MODEL_STATUS = re.compile(
+    r"^[^:\s]+: (?=HTTP \d{3}|network error|[^:]*failed after \d+ attempts?: )"
+)
+
+# "gpt-4o-mini failed after 1 attempts: ..."
+_MODEL_ATTEMPTS = re.compile(
+    r"^[^:\s]+ failed after \d+ attempts?: "
+)
+
+
+def brief_error(detail: str) -> str:
+    """One readable line, without the client's per-model wrapper.
+
+    The client reports every attempted model, wrapped in a summary
+    sentence and split over lines. The panel has one line, so the summary
+    and the model-name prefixes are dropped while the HTTP status and the
+    provider's own message are kept.
+    """
+
+    line = " ".join(str(detail).split())
+
+    if line.startswith(FAILURE_WRAPPER):
+        line = line[len(FAILURE_WRAPPER):].strip()
+
+    line = _MODEL_STATUS.sub("", line)
+    line = _MODEL_ATTEMPTS.sub("", line)
+
+    return line.strip()
 
 
 def test_ai_connection(
@@ -31,10 +66,9 @@ def test_ai_connection(
         )
 
     except Exception as exc:  # reported in the window, never a crash
-        return False, str(exc)
+        return False, brief_error(str(exc))
 
-    # The panel shows one line; client errors can carry newlines.
-    return ok, " ".join(detail.split())
+    return ok, brief_error(detail)
 
 
 def run_instruction(

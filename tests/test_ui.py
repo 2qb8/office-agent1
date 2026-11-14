@@ -534,9 +534,10 @@ class ConnectionTestTests(unittest.TestCase):
             ok, detail = desktop.test_ai_connection(OPENAI_ENV)
 
         self.assertFalse(ok)
-        self.assertIn("HTTP 401", detail)
-        self.assertIn("Incorrect API key", detail)
-        self.assertNotIn("\n", detail)
+        self.assertEqual(
+            detail,
+            'HTTP 401: {"error": {"message": "Incorrect API key provided"}}',
+        )
 
     def test_an_unreachable_endpoint_reports_the_network_error(self):
         with mock.patch(
@@ -548,9 +549,33 @@ class ConnectionTestTests(unittest.TestCase):
             ok, detail = desktop.test_ai_connection(OPENAI_ENV)
 
         self.assertFalse(ok)
-        self.assertIn("network error", detail)
-        self.assertIn("getaddrinfo failed", detail)
-        self.assertNotIn("\n", detail)
+        self.assertEqual(detail, "network error: getaddrinfo failed")
+
+
+class BriefErrorMessageTests(unittest.TestCase):
+    """The panel shows one line, not the client's per-model report."""
+
+    def test_drops_the_summary_and_the_model_prefix(self):
+        self.assertEqual(
+            desktop.brief_error(
+                "All configured LLM models failed:\n"
+                'gpt-4o-mini: HTTP 401: {"error": "bad key"}'
+            ),
+            'HTTP 401: {"error": "bad key"}',
+        )
+
+    def test_drops_a_repeated_model_name_before_a_network_error(self):
+        self.assertEqual(
+            desktop.brief_error(
+                "All configured LLM models failed:\n"
+                "some/model: some/model failed after 1 attempts: "
+                "network error: timed out"
+            ),
+            "network error: timed out",
+        )
+
+    def test_leaves_a_plain_reply_alone(self):
+        self.assertEqual(desktop.brief_error("OK"), "OK")
 
 
 class ConfigCheckingFactoryTests(unittest.TestCase):
@@ -761,18 +786,17 @@ class GuiWindowTests(unittest.TestCase):
                 "the connection test never finished",
             )
 
-        status = self.window.ai_status_var.get()
-
-        # The client wraps model errors, so only the template prefix and the
-        # facts that matter are pinned here.
-        self.assertTrue(
-            status.startswith(
-                ui.text(self.window.language, "ai_fail", detail="")
+        self.assertEqual(
+            self.window.ai_status_var.get(),
+            ui.text(
+                self.window.language,
+                "ai_fail",
+                detail=(
+                    'HTTP 401: {"error": '
+                    '{"message": "Incorrect API key provided"}}'
+                ),
             ),
-            status,
         )
-        self.assertIn("HTTP 401", status)
-        self.assertIn("Incorrect API key", status)
 
     def test_connection_button_reports_an_unreachable_endpoint(self):
         self._use_openai()
@@ -788,15 +812,14 @@ class GuiWindowTests(unittest.TestCase):
                 "the connection test never finished",
             )
 
-        status = self.window.ai_status_var.get()
-
-        self.assertTrue(
-            status.startswith(
-                ui.text(self.window.language, "ai_fail", detail="")
+        self.assertEqual(
+            self.window.ai_status_var.get(),
+            ui.text(
+                self.window.language,
+                "ai_fail",
+                detail="network error: getaddrinfo failed",
             ),
-            status,
         )
-        self.assertIn("network error", status)
 
     def test_run_plans_prose_with_the_configured_model(self):
         job = Path(self._settings.name) / "ai-job"
