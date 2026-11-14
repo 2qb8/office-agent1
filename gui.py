@@ -12,16 +12,13 @@ from pathlib import Path
 from tkinter import filedialog, font as tkfont, ttk
 
 from agent import __version__, ai_config
+from agent.desktop import run_instruction
 from agent.llm_factory import PROVIDERS
-from agent.registry import build_registry
-from agent.runtime import AgentRuntime
-from agent.spec import SpecError
 from agent.ui import (
     APP_TITLE,
     LANGUAGES,
     default_output_dir,
     describe_state,
-    instruction_job_dir,
     is_instruction_file,
     remembered_ai,
     remembered_language,
@@ -799,26 +796,9 @@ class OfficeAgentWindow:
         ).start()
 
     def _work(self, instruction: Path) -> None:
-        try:
-            runtime = AgentRuntime(
-                instruction_job_dir(instruction),
-                build_registry(),
-                instruction_path=instruction,
-            )
-
-            # A spec in the instruction always wins; AI is used only for
-            # instructions that have none, and only when configured.
-            state = runtime.run()
-
-            self.messages.put(
-                ("done", state, runtime.output_files(state))
-            )
-
-        except SpecError:
-            self.messages.put(("nospec", None, None))
-
-        except Exception as exc:  # surfaced in the window, not a crash
-            self.messages.put(("error", exc, None))
+        # A spec in the instruction always wins; AI is used only for
+        # instructions that have none, and only when configured.
+        self.messages.put(run_instruction(instruction))
 
     def _poll(self) -> None:
         try:

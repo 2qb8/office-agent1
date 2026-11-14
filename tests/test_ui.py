@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import json
 import os
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -11,7 +13,8 @@ from unittest import mock
 
 from docx import Document
 
-from agent import ai_config, ui
+from agent import ai_config, desktop, ui
+from agent.llm import LLM
 from agent.registry import build_registry
 from agent.runtime import AgentRuntime
 
@@ -25,6 +28,72 @@ steps:
       output_path: output/quick.txt
       content: hi
 """
+
+# What the stub model replies with when it is asked to plan prose.
+AI_PLAN = {
+    "goal": "write a note",
+    "steps": [
+        {
+            "id": "write",
+            "description": "write the note",
+            "tool": "text",
+            "action": "write",
+            "arguments": {
+                "output_path": "output/ai-note.txt",
+                "content": "planned by the stub",
+            },
+            "depends_on": [],
+        }
+    ],
+}
+
+PROSE = "Write a short note to output/ai-note.txt."
+
+
+class StubPlanner(LLM):
+    """A plan-returning model with no network behind it."""
+
+    def __init__(self, payload: dict = AI_PLAN) -> None:
+        self.payload = payload
+        self.prompts: list = []
+
+    def generate(self, prompt, temperature=0.0, max_tokens=None) -> str:
+        self.prompts.append(prompt)
+
+        return json.dumps(self.payload)
+
+
+class UnusedPlanner:
+    """A client factory that fails the test if the planner asks for one."""
+
+    def __init__(self) -> None:
+        self.called = False
+
+    def __call__(self):
+        self.called = True
+        raise AssertionError(
+            "the AI planner must not run when the instruction has a spec"
+        )
+
+
+def prompt_text(prompt) -> str:
+    if isinstance(prompt, str):
+        return prompt
+
+    return "\n".join(
+        str(message.get("content", "")) for message in prompt
+    )
+
+
+def write_docx(path: Path, lines) -> Path:
+    document = Document()
+
+    for line in lines:
+        document.add_paragraph(line)
+
+    document.save(path)
+
+    return path
 
 
 class LanguageTests(unittest.TestCase):
@@ -236,6 +305,104 @@ class ExplicitInstructionTests(unittest.TestCase):
                 AgentRuntime(job, build_registry())
 
 
+class DesktopRunPathTests(unittest.TestCase):
+    """The body of the window's Run button, without opening a window."""
+
+    def setUp(self):
+        self._temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temp.cleanup)
+
+        self.job = Path(self._temp.name) / "job"
+        self.job.mkdir(parents=True)
+
+        patcher = mock.patch.dict(
+            os.environ,
+            {
+                "LLM_PROVIDER": "",
+                "LLM_BASE_URL": "",
+                "LLM_MODEL": "",
+                "LLM_API_KEY": "",
+            },
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def use_provider(self) -> None:
+        ai_config.apply_environment(
+            {
+                "provider": "openai",
+                "base_url": "https://example.test/v1",
+                "model": "stub-model",
+                "api_key": "test-key",
+            }
+        )
+
+    def test_prose_instruction_is_planned_by_the_configured_model(self):
+        instruction = write_docx(self.job / "instruction.docx", [PROSE])
+
+        self.use_provider()
+
+        stub = StubPlanner()
+
+        with mock.patch(
+            "agent.runtime.try_create_llm",
+            return_value=stub,
+        ):
+            with redirect_stdout(io.StringIO()):
+                kind, state, outputs = desktop.run_instruction(
+                    instruction
+                )
+
+        self.assertEqual(kind, "done")
+        self.assertEqual(state.status.value, "success")
+
+        note = self.job / "output" / "ai-note.txt"
+
+        self.assertEqual(
+            note.read_text(encoding="utf-8").strip(),
+            "planned by the stub",
+        )
+        self.assertEqual(outputs, [str(note.resolve())])
+
+        self.assertEqual(len(stub.prompts), 1)
+        self.assertIn(PROSE, prompt_text(stub.prompts[0]))
+
+    def test_spec_instruction_never_calls_the_model(self):
+        instruction = write_docx(
+            self.job / "instruction.docx",
+            SPEC.strip().splitlines(),
+        )
+
+        self.use_provider()
+
+        factory = UnusedPlanner()
+
+        with mock.patch("agent.runtime.try_create_llm", factory):
+            with redirect_stdout(io.StringIO()):
+                kind, state, outputs = desktop.run_instruction(
+                    instruction
+                )
+
+        self.assertFalse(factory.called)
+        self.assertEqual(kind, "done")
+        self.assertEqual(
+            (self.job / "output" / "quick.txt")
+            .read_text(encoding="utf-8")
+            .strip(),
+            "hi",
+        )
+
+    def test_prose_without_a_provider_reports_the_missing_spec(self):
+        instruction = write_docx(self.job / "instruction.docx", [PROSE])
+
+        with redirect_stdout(io.StringIO()):
+            kind, payload, outputs = desktop.run_instruction(instruction)
+
+        self.assertEqual(kind, "nospec")
+        self.assertIsNone(payload)
+        self.assertEqual(outputs, [])
+
+
 class GuiModuleTests(unittest.TestCase):
     def test_gui_module_compiles(self):
         source = Path(__file__).resolve().parent.parent / "gui.py"
@@ -351,6 +518,81 @@ class GuiWindowTests(unittest.TestCase):
             self.window.provider_by_label,
         )
         self.assertTrue(self.window.ai_status_var.get().strip())
+
+    def _wait_for_run(self, timeout: float = 25.0) -> bool:
+        """Pump the window until the worker thread reports back."""
+
+        deadline = time.time() + timeout
+
+        while time.time() < deadline:
+            self.root.update()
+
+            if not self.window.running:
+                return True
+
+            time.sleep(0.02)
+
+        return False
+
+    def _use_openai(self) -> None:
+        self.window.provider_var.set("OpenAI")
+        self.window.on_provider_change()
+        self.window.api_key_var.set("test-key")
+
+    def test_run_plans_prose_with_the_configured_model(self):
+        job = Path(self._settings.name) / "ai-job"
+        job.mkdir()
+
+        instruction = write_docx(job / "instruction.docx", [PROSE])
+
+        self.window.use_instruction(instruction)
+        self._use_openai()
+
+        stub = StubPlanner()
+
+        with mock.patch(
+            "agent.runtime.try_create_llm",
+            return_value=stub,
+        ):
+            self.window.run_job()
+
+            self.assertTrue(self._wait_for_run(), "the run never finished")
+
+        self.assertEqual(len(stub.prompts), 1)
+        self.assertIn(PROSE, prompt_text(stub.prompts[0]))
+
+        self.assertEqual(
+            self.window.status_var.get(),
+            ui.text(self.window.language, "done", count=1),
+        )
+        self.assertIn("[OK] write", self.window.log.get("1.0", "end"))
+        self.assertTrue((job / "output" / "ai-note.txt").is_file())
+
+    def test_run_keeps_the_spec_when_a_provider_is_configured(self):
+        job = Path(self._settings.name) / "spec-job"
+        job.mkdir()
+
+        instruction = write_docx(
+            job / "instruction.docx",
+            SPEC.strip().splitlines(),
+        )
+
+        self.window.use_instruction(instruction)
+        self._use_openai()
+
+        factory = UnusedPlanner()
+
+        with mock.patch("agent.runtime.try_create_llm", factory):
+            self.window.run_job()
+
+            self.assertTrue(self._wait_for_run(), "the run never finished")
+
+        self.assertFalse(factory.called)
+        self.assertEqual(
+            self.window.status_var.get(),
+            ui.text(self.window.language, "done", count=1),
+        )
+        self.assertTrue((job / "output" / "quick.txt").is_file())
 
     def test_ai_choice_is_saved_and_becomes_usable(self):
         self.window.provider_var.set("Ollama (local)")
