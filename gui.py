@@ -899,6 +899,7 @@ class OfficeAgentWindow:
 
         self.output_var.set(str(default_output_dir(instruction)))
         self.outputs = []
+        self.failed = False
 
         self._clear_log()
         self._set_running(True)
@@ -918,7 +919,6 @@ class OfficeAgentWindow:
         self._append("", None)
 
         self.cancel = threading.Event()
-        self.failed = False
 
         try:
             remember_recent(instruction)

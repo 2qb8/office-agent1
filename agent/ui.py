@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from agent import secrets
 from agent.job import INSTRUCTION_SUFFIXES
 
 APP_TITLE = "Office Agent"
@@ -242,19 +243,31 @@ def remembered_ai() -> dict[str, str]:
     if not isinstance(stored, dict):
         return {}
 
-    return {
+    values = {
         field: str(stored.get(field) or "").strip()
         for field in AI_FIELDS
+        if field != "api_key"
     }
+
+    # Sealed with DPAPI on Windows, so copying the settings file to another
+    # machine does not copy the key.
+    values["api_key"] = secrets.unprotect(stored.get("api_key")).strip()
+
+    return values
 
 
 def save_ai(values: dict[str, str]) -> None:
-    save_settings(
-        ai={
-            field: str(values.get(field) or "").strip()
-            for field in AI_FIELDS
-        }
+    stored = {
+        field: str(values.get(field) or "").strip()
+        for field in AI_FIELDS
+        if field != "api_key"
+    }
+
+    stored["api_key"] = secrets.protect(
+        str(values.get("api_key") or "").strip()
     )
+
+    save_settings(ai=stored)
 
 
 RECENT_LIMIT = 5

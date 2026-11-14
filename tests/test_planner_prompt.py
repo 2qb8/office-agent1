@@ -22,6 +22,14 @@ class PlannerPromptTests(unittest.TestCase):
             ADVERTISED_LINE.findall(SYSTEM_PROMPT)
         )
 
+    def test_the_prompt_asks_for_the_instruction_language(self):
+        # A Russian instruction must not come back with English headings just
+        # because the prompt itself is in English.
+        self.assertIn(
+            "in the language the instruction is written",
+            SYSTEM_PROMPT,
+        )
+
     def test_every_registered_action_is_in_the_prompt(self):
         missing = []
 

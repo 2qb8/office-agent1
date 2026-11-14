@@ -40,16 +40,24 @@ executable is unsigned unless signing secrets are configured (see
 ![The desktop window](docs/window.png)
 
 1. Double-click `office-agent-gui.exe`.
-2. **Choose…** your instruction `.docx` (or `.txt` / `.md`).
+2. **Choose…** your instruction `.docx` (or `.txt` / `.md`), or press
+   **Try an example** to run the bundled sales pack.
 3. The output folder beside it appears in the window.
 4. Choose **English** or **Русский** — the choice is remembered.
 5. Press **Run**.
 
-The window logs every step, and **Open output folder** shows the generated
-files. Instructions that contain a `steps` block run straight from the spec;
+With **Review the plan before running** ticked (the default), the steps the
+agent intends to take appear first, and nothing is written until you press
+the dialog's Run button. **Stop** ends a run at the next step boundary
+rather than in the middle of a file. The bar follows executed steps, the
+created files are listed as links that open them, and **Copy details**
+puts the instruction, output folder, log path and status on the clipboard
+for a bug report. **Recent** holds your last five instructions.
+
+Instructions that contain a `steps` block run straight from the spec;
 inputs referenced as `inputs/...` are read from folders beside the
 instruction file. The command-line executable (`office-agent.exe`) is in the
-same artifact.
+same release.
 
 ### AI in the window
 
@@ -58,8 +66,9 @@ section of the window, pick a provider (OpenAI, Gemini, OpenRouter, a local
 Ollama server or any OpenAI-compatible endpoint), paste a key and press
 **Test connection**. The settings, including the key, are stored in your own
 user settings file (`~/.office-agent.json`, readable only by you) and are
-reused on the next launch. Leave the key empty and the app stays fully
-offline.
+reused on the next launch. On Windows the key is sealed with DPAPI, so the
+settings file is useless on another machine or under another account.
+Leave the key empty and the app stays fully offline.
 
 Build both yourself with `python build_exe.py` (Windows, or Linux with
 `python3-tk` installed).

@@ -15,7 +15,8 @@ from unittest import mock
 import requests
 from docx import Document
 
-from agent import ai_config, desktop, ui
+from agent import ai_config, desktop, secrets, ui
+from agent.joblock import JobBusyError, JobLock
 from agent.llm import LLM, LLMError
 from agent.llm_factory import resolve_settings
 from agent.registry import build_registry
@@ -518,6 +519,140 @@ class PlanAndStopTests(unittest.TestCase):
         self.assertEqual(state.status.value, "success")
         self.assertEqual(seen[0], (0, 3))
         self.assertEqual(seen[-1], (3, 3))
+
+
+class SavedKeyTests(unittest.TestCase):
+    """The key in the settings file, and where it must never appear."""
+
+    KEY = "sk-test-7d1f0a9d-not-a-real-key"
+
+    def setUp(self):
+        self._settings = tempfile.TemporaryDirectory()
+        self.addCleanup(self._settings.cleanup)
+
+        self.settings = Path(self._settings.name) / "settings.json"
+
+        patcher = mock.patch.dict(
+            os.environ,
+            {
+                ui.SETTINGS_ENV: str(self.settings),
+                "LLM_PROVIDER": "",
+                "LLM_BASE_URL": "",
+                "LLM_MODEL": "",
+                "LLM_API_KEY": "",
+            },
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_the_key_round_trips_through_the_settings_file(self):
+        ui.save_ai(
+            {
+                "provider": "openai",
+                "base_url": "https://api.openai.com/v1",
+                "model": "gpt-4o-mini",
+                "api_key": self.KEY,
+            }
+        )
+
+        self.assertEqual(ui.remembered_ai()["api_key"], self.KEY)
+
+    def test_the_settings_file_does_not_hold_the_key_in_the_clear(self):
+        ui.save_ai({"provider": "openai", "api_key": self.KEY})
+
+        stored = self.settings.read_text(encoding="utf-8")
+
+        self.assertNotIn(self.KEY, stored)
+
+        scheme = json.loads(stored)["ai"]["api_key"]["scheme"]
+
+        self.assertIn(scheme, {"dpapi", "base64"})
+        self.assertEqual(scheme, "dpapi" if secrets.WINDOWS else "base64")
+
+    def test_a_key_saved_by_an_older_version_still_loads(self):
+        self.settings.write_text(
+            json.dumps({"ai": {"provider": "openai", "api_key": self.KEY}}),
+            encoding="utf-8",
+        )
+
+        self.assertEqual(ui.remembered_ai()["api_key"], self.KEY)
+
+    def test_the_key_never_reaches_the_run_log_or_the_report(self):
+        job = Path(self._settings.name) / "job"
+        job.mkdir(parents=True)
+
+        instruction = write_docx(
+            job / "instruction.docx", SPEC.strip().splitlines()
+        )
+
+        ui.save_ai({"provider": "openai", "api_key": self.KEY})
+
+        with redirect_stdout(io.StringIO()):
+            kind, state, outputs = desktop.run_instruction(instruction)
+
+        self.assertEqual(kind, "done")
+
+        for name in ("run.log", "report.json", "state.json"):
+            path = job / name
+
+            self.assertTrue(path.is_file(), f"{name} was not written")
+            self.assertNotIn(
+                self.KEY,
+                path.read_text(encoding="utf-8"),
+                f"the API key leaked into {name}",
+            )
+
+
+class JobLockTests(unittest.TestCase):
+    def setUp(self):
+        self._temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temp.cleanup)
+
+        self.job = Path(self._temp.name)
+
+    def test_a_second_run_in_the_same_folder_is_refused(self):
+        with JobLock(self.job):
+            with self.assertRaises(JobBusyError):
+                with JobLock(self.job):
+                    pass
+
+    def test_the_lock_is_released_when_the_run_ends(self):
+        with JobLock(self.job):
+            self.assertTrue((self.job / ".running").is_file())
+
+        self.assertFalse((self.job / ".running").exists())
+
+        with JobLock(self.job):
+            pass
+
+    def test_a_lock_left_by_a_crashed_run_does_not_block_forever(self):
+        lock = self.job / ".running"
+        lock.write_text("999999\n", encoding="utf-8")
+
+        old = time.time() - 13 * 60 * 60
+        os.utime(lock, (old, old))
+
+        with JobLock(self.job):
+            self.assertTrue(lock.is_file())
+
+    def test_a_fresh_lock_blocks_the_next_run(self):
+        (self.job / ".running").write_text("123\n", encoding="utf-8")
+
+        with self.assertRaises(JobBusyError):
+            with JobLock(self.job):
+                pass
+
+    def test_two_windows_on_one_folder_report_busy(self):
+        instruction = write_docx(
+            self.job / "instruction.docx", SPEC.strip().splitlines()
+        )
+
+        with JobLock(self.job):
+            with redirect_stdout(io.StringIO()):
+                kind, payload, outputs = desktop.run_instruction(instruction)
+
+        self.assertEqual(kind, "busy")
+        self.assertEqual(outputs, [])
 
 
 class SelfTestTests(unittest.TestCase):

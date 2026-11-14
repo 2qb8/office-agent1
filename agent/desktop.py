@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from agent import ai_config
+from agent.joblock import JobBusyError, JobLock
 from agent.registry import build_registry
 from agent.runtime import AgentRuntime
 from agent.spec import SpecError
@@ -59,9 +60,14 @@ def plan_instruction(
     """
 
     try:
-        runtime = build_runtime(instruction)
+        with JobLock(instruction_job_dir(instruction)):
+            runtime = build_runtime(instruction)
+            plan = runtime.plan()
 
-        return runtime, "plan", runtime.plan()
+        return runtime, "plan", plan
+
+    except JobBusyError:
+        return None, "busy", None
 
     except SpecError:
         return None, "nospec", None
@@ -79,13 +85,17 @@ def execute_plan(
     """Run a plan built by :func:`plan_instruction`."""
 
     try:
-        state = runtime.execute_plan(
-            plan,
-            progress=progress,
-            cancel=cancel,
-        )
+        with JobLock(Path(runtime.job_path)):
+            state = runtime.execute_plan(
+                plan,
+                progress=progress,
+                cancel=cancel,
+            )
 
         return "done", state, runtime.output_files(state)
+
+    except JobBusyError:
+        return "busy", None, []
 
     except Exception as exc:  # surfaced in the window, not a crash
         return "error", exc, []

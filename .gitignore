@@ -15,3 +15,5 @@ dist/
 build/
 assets/version_info_*.txt
 /.env
+jobs/*/.running
+examples/*/.running

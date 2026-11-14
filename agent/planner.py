@@ -103,6 +103,11 @@ OPERATORS
   not_in, is_empty, not_empty
 - aggregate op: sum, count, mean, min, max
 
+LANGUAGE
+- Write every user-visible string you produce (headings, paragraph text,
+  table headers, table cells) in the language the instruction is written
+  in, unless the instruction asks for another one.
+
 RULES
 - Use only the tools, actions and arguments listed above.
 - Use exact filenames, worksheet names and column names from the job
