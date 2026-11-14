@@ -182,7 +182,7 @@ class OfficeAgentWindow:
 
     def _build(self) -> None:
         self.root.configure(bg=WINDOW_BG)
-        self.root.minsize(860, 700)
+        self.root.minsize(860, 780)
 
         self._setup_style()
 
@@ -199,7 +199,9 @@ class OfficeAgentWindow:
         self._build_footer(body)
 
         self._set_icon()
-        self._center(900, 740)
+        # Tall enough for both footer rows: the review checkbox and the
+        # Copy details / Open run log pair sit below Run.
+        self._center(900, 830)
 
     def _build_header(self) -> None:
         header = tk.Frame(self.root, bg=HEADER_BG)
