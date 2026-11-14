@@ -30,11 +30,13 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
+        id: deps
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pyinstaller
 
       - name: Run tests
+        id: tests
         shell: bash
         # The window tests must really run here; a skipped suite is a failure.
         env:
@@ -62,6 +64,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p docs
+          [ -f tests.log ] || touch tests.log
           {
             echo "Only present while the last Windows run failed; CI removes it"
             echo "once the tests pass again. No sign-in needed to read it."
@@ -88,24 +91,29 @@ jobs:
           git push origin HEAD:main || true
 
       - name: Open the desktop window
+        id: window
         run: |
           python -c "import tkinter, gui; root = tkinter.Tk(); window = gui.OfficeAgentWindow(root); root.update_idletasks(); print('window ok', root.winfo_width(), root.winfo_height()); window.close()"
 
       - name: Capture a screenshot of the window
+        id: shot
         continue-on-error: true
         run: python assets/window_shot.py
 
       # Compared against a deliberately committed reference, so a layout
       # regression shows up as a failed step with a diff image attached.
       - name: Compare the window against the golden screenshot
+        id: compare
         continue-on-error: true
         run: |
           python assets/compare_shot.py docs/window.png docs/window-golden.png
 
       - name: Build executables
+        id: build
         run: python build_exe.py
 
       - name: Verify both executables exist
+        id: verify
         shell: bash
         run: |
           ls -l dist
@@ -114,6 +122,7 @@ jobs:
           cat dist/build-manifest.txt
 
       - name: Smoke test command line executable
+        id: smoke
         run: dist\office-agent.exe tools
 
       # The windowed executable has no console, so it proves itself through
@@ -121,6 +130,7 @@ jobs:
       # exercises the frozen bundle end to end: bundled assets, docx and
       # openpyxl data files, Tk imports and the bootloader.
       - name: Self-test the desktop executable
+        id: selftest
         shell: pwsh
         run: |
           $job = Join-Path $env:TEMP "office-agent-selftest"
@@ -131,6 +141,7 @@ jobs:
             -ArgumentList @("--self-test", $job) -Wait -PassThru
           $watch.Stop()
           "exit code: $($process.ExitCode) after $([math]::Round($watch.Elapsed.TotalSeconds, 1))s"
+          Copy-Item (Join-Path $job "self-test.txt") dist\self-test.txt -ErrorAction SilentlyContinue
           Get-Content (Join-Path $job "self-test.txt") -ErrorAction SilentlyContinue
           if ($process.ExitCode -ne 0) {
             throw "office-agent-gui.exe --self-test failed with $($process.ExitCode)."
@@ -142,17 +153,20 @@ jobs:
           $created | Format-Table Name, Length
 
       - uses: actions/upload-artifact@v4
+        id: upload
         with:
           name: office-agent-windows
           path: |
             dist/office-agent.exe
             dist/office-agent-gui.exe
             dist/build-manifest.txt
+            dist/self-test.txt
             docs/window.png
             docs/window-diff.png
           if-no-files-found: error
 
       - name: Publish the window screenshot
+        id: publishshot
         if: github.ref == 'refs/heads/main'
         shell: bash
         run: |
@@ -171,6 +185,7 @@ jobs:
       # below signs the executables without changing anything else; without
       # them the step explains itself and the release stays checksum-only.
       - name: Sign the executables
+        id: sign
         shell: bash
         env:
           CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
@@ -194,6 +209,7 @@ jobs:
           rm -f "$RUNNER_TEMP/cert.pfx"
 
       - name: Publish the release
+        id: release
         if: github.ref == 'refs/heads/main'
         shell: bash
         env:
@@ -240,13 +256,57 @@ jobs:
             dist/SHA256SUMS.txt
 
       - name: Clear the failure report
+        id: clear
         if: success()
         shell: bash
         run: |
-          if [ -f docs/test-failures.txt ]; then
+          if [ -f docs/test-failures.txt ] || [ -f docs/step-failures.txt ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git rm -q docs/test-failures.txt
+            git rm -q -f docs/test-failures.txt docs/step-failures.txt 2>/dev/null || true
             git commit -m "Windows tests pass again on ${GITHUB_SHA:0:7} [skip ci]"
             git push origin HEAD:main || true
           fi
+
+      # A failure after the test step leaves no trace without signing in, so
+      # this records which step failed and what the build left behind. It
+      # runs last and only writes a file the next green run removes.
+      - name: Record which step failed
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p docs
+          {
+            echo "Only present while the last Windows run failed; CI removes it"
+            echo "once the run is green again. No sign-in needed to read this."
+            echo
+            echo "Run:    ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "Commit: ${GITHUB_SHA}"
+            echo
+            echo "Steps:"
+            echo "  install=${{ steps.deps.outcome }}"
+            echo "  tests=${{ steps.tests.outcome }}"
+            echo "  window=${{ steps.window.outcome }}"
+            echo "  screenshot=${{ steps.shot.outcome }}"
+            echo "  golden=${{ steps.compare.outcome }}"
+            echo "  build=${{ steps.build.outcome }}"
+            echo "  verify=${{ steps.verify.outcome }}"
+            echo "  cli=${{ steps.smoke.outcome }}"
+            echo "  selftest=${{ steps.selftest.outcome }}"
+            echo "  upload=${{ steps.upload.outcome }}"
+            echo "  screenshot-publish=${{ steps.publishshot.outcome }}"
+            echo "  sign=${{ steps.sign.outcome }}"
+            echo "  release=${{ steps.release.outcome }}"
+            echo
+            echo "dist/:"
+            ls -l dist 2>/dev/null || echo "  (no dist)"
+            echo
+            echo "Self-test report:"
+            cat dist/self-test.txt 2>/dev/null || echo "  (none)"
+          } > docs/step-failures.txt
+          cat docs/step-failures.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f docs/step-failures.txt
+          git commit -m "Record the failing Windows step from ${GITHUB_SHA:0:7} [skip ci]" || exit 0
+          git push origin HEAD:main || true
