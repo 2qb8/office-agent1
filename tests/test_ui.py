@@ -15,6 +15,7 @@ from docx import Document
 
 from agent import ai_config, desktop, ui
 from agent.llm import LLM
+from agent.llm_factory import resolve_settings
 from agent.registry import build_registry
 from agent.runtime import AgentRuntime
 
@@ -49,6 +50,28 @@ AI_PLAN = {
 
 PROSE = "Write a short note to output/ai-note.txt."
 
+# What the planner must see after the window saves this selection: OpenAI's
+# preset endpoint and model, plus the key typed into the window.
+OPENAI_ENV = {
+    "provider": "openai",
+    "base_url": "https://api.openai.com/v1",
+    "model": "gpt-4o-mini",
+    "api_key": "test-key",
+}
+
+
+def planner_settings() -> dict[str, str]:
+    """The configuration the planner would read in this process."""
+
+    settings = resolve_settings()
+
+    return {
+        "provider": settings["provider"],
+        "base_url": settings["base_url"],
+        "model": settings["model"],
+        "api_key": settings["api_key"],
+    }
+
 
 class StubPlanner(LLM):
     """A plan-returning model with no network behind it."""
@@ -61,6 +84,36 @@ class StubPlanner(LLM):
         self.prompts.append(prompt)
 
         return json.dumps(self.payload)
+
+
+class ConfigCheckingFactory:
+    """Stands in for try_create_llm without ignoring the wiring.
+
+    The real factory builds a client from the environment the window wrote,
+    so this one refuses to hand out the stub unless the planner sees exactly
+    the provider, endpoint, model and key the window selected. A window that
+    stops saving its settings makes the run fail here instead of quietly
+    passing the test.
+    """
+
+    def __init__(self, client: LLM, expected: dict[str, str]) -> None:
+        self.client = client
+        self.expected = expected
+        self.calls = 0
+
+    def __call__(self) -> LLM:
+        self.calls += 1
+
+        actual = planner_settings()
+
+        if actual != self.expected:
+            raise AssertionError(
+                "the window's AI settings never reached the planner:\n"
+                f"  expected: {self.expected}\n"
+                f"  actual:   {actual}"
+            )
+
+        return self.client
 
 
 class UnusedPlanner:
@@ -328,14 +381,15 @@ class DesktopRunPathTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def use_provider(self) -> None:
-        ai_config.apply_environment(
-            {
-                "provider": "openai",
-                "base_url": "https://example.test/v1",
-                "model": "stub-model",
-                "api_key": "test-key",
-            }
-        )
+        ai_config.apply_environment(OPENAI_ENV)
+
+    def assert_done(self, kind: str, payload) -> None:
+        """A failed run reports the exception, not just 'error'."""
+
+        if kind != "done":
+            raise AssertionError(
+                f"the run ended as {kind!r}: {payload}"
+            )
 
     def test_prose_instruction_is_planned_by_the_configured_model(self):
         instruction = write_docx(self.job / "instruction.docx", [PROSE])
@@ -343,17 +397,17 @@ class DesktopRunPathTests(unittest.TestCase):
         self.use_provider()
 
         stub = StubPlanner()
+        factory = ConfigCheckingFactory(stub, OPENAI_ENV)
 
-        with mock.patch(
-            "agent.runtime.try_create_llm",
-            return_value=stub,
-        ):
+        with mock.patch("agent.runtime.try_create_llm", factory):
             with redirect_stdout(io.StringIO()):
                 kind, state, outputs = desktop.run_instruction(
                     instruction
                 )
 
-        self.assertEqual(kind, "done")
+        self.assert_done(kind, state)
+        self.assertEqual(factory.calls, 1)
+        self.assertEqual(planner_settings(), OPENAI_ENV)
         self.assertEqual(state.status.value, "success")
 
         note = self.job / "output" / "ai-note.txt"
@@ -384,7 +438,8 @@ class DesktopRunPathTests(unittest.TestCase):
                 )
 
         self.assertFalse(factory.called)
-        self.assertEqual(kind, "done")
+        self.assertEqual(planner_settings(), OPENAI_ENV)
+        self.assert_done(kind, state)
         self.assertEqual(
             (self.job / "output" / "quick.txt")
             .read_text(encoding="utf-8")
@@ -401,6 +456,27 @@ class DesktopRunPathTests(unittest.TestCase):
         self.assertEqual(kind, "nospec")
         self.assertIsNone(payload)
         self.assertEqual(outputs, [])
+
+
+class ConfigCheckingFactoryTests(unittest.TestCase):
+    def test_the_factory_refuses_a_client_for_other_settings(self):
+        """Without this the window tests could pass on a broken wiring."""
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "LLM_PROVIDER": "",
+                "LLM_BASE_URL": "",
+                "LLM_MODEL": "",
+                "LLM_API_KEY": "",
+            },
+        ):
+            factory = ConfigCheckingFactory(StubPlanner(), OPENAI_ENV)
+
+            with self.assertRaises(AssertionError) as caught:
+                factory()
+
+        self.assertIn("never reached the planner", str(caught.exception))
 
 
 class GuiModuleTests(unittest.TestCase):
@@ -549,17 +625,17 @@ class GuiWindowTests(unittest.TestCase):
         self._use_openai()
 
         stub = StubPlanner()
+        factory = ConfigCheckingFactory(stub, OPENAI_ENV)
 
-        with mock.patch(
-            "agent.runtime.try_create_llm",
-            return_value=stub,
-        ):
+        with mock.patch("agent.runtime.try_create_llm", factory):
             self.window.run_job()
 
             self.assertTrue(self._wait_for_run(), "the run never finished")
 
+        self.assertEqual(factory.calls, 1)
         self.assertEqual(len(stub.prompts), 1)
         self.assertIn(PROSE, prompt_text(stub.prompts[0]))
+        self.assertEqual(planner_settings(), OPENAI_ENV)
 
         self.assertEqual(
             self.window.status_var.get(),
@@ -588,6 +664,7 @@ class GuiWindowTests(unittest.TestCase):
             self.assertTrue(self._wait_for_run(), "the run never finished")
 
         self.assertFalse(factory.called)
+        self.assertEqual(planner_settings(), OPENAI_ENV)
         self.assertEqual(
             self.window.status_var.get(),
             ui.text(self.window.language, "done", count=1),
