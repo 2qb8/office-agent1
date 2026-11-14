@@ -10,6 +10,15 @@ from agent.llm_factory import PROVIDERS, resolve_settings
 
 CONFIG_PATH = Path("config") / ".env"
 
+# Field name used by the window and the settings file -> environment name
+# the planner reads.
+ENVIRONMENT = {
+    "provider": "LLM_PROVIDER",
+    "base_url": "LLM_BASE_URL",
+    "model": "LLM_MODEL",
+    "api_key": "LLM_API_KEY",
+}
+
 
 @dataclass(frozen=True)
 class AiConfig:
@@ -18,6 +27,32 @@ class AiConfig:
     model: str
     api_key: str
 
+
+def apply_environment(values: dict[str, str]) -> None:
+    """Make saved settings visible to the planner in this process.
+
+    Empty values are removed, so clearing the key in the window really
+    turns cloud providers off instead of falling back to an old one.
+    """
+
+    for field, name in ENVIRONMENT.items():
+        value = str(values.get(field) or "").strip()
+
+        if value:
+            os.environ[name] = value
+        else:
+            os.environ.pop(name, None)
+
+
+def from_values(values: dict[str, str]) -> AiConfig:
+    """Build one configuration from window/settings values."""
+
+    return AiConfig(
+        provider=str(values.get("provider") or "").strip().lower(),
+        base_url=str(values.get("base_url") or "").strip(),
+        model=str(values.get("model") or "").strip(),
+        api_key=str(values.get("api_key") or "").strip(),
+    )
 
 def resolve() -> AiConfig:
     """Current AI settings from the environment (and config/.env)."""

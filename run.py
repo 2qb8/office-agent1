@@ -7,31 +7,11 @@ import sys
 from pathlib import Path
 
 from agent import __version__
-from agent.registry import ToolRegistry
+from agent.registry import build_registry
 from agent.runtime import AgentRuntime
 from agent.spec import SPEC_TEMPLATE
-from tools.excel import ExcelTool
-from tools.filesystem import FilesystemTool
-from tools.screenshot import ScreenshotTool
-from tools.table import TableTool
-from tools.text import TextTool
-from tools.word import WordTool
 
-
-def build_registry() -> ToolRegistry:
-    registry = ToolRegistry()
-
-    for tool in (
-        ExcelTool(),
-        WordTool(),
-        TextTool(),
-        TableTool(),
-        FilesystemTool(),
-        ScreenshotTool(),
-    ):
-        registry.register(tool)
-
-    return registry
+__all__ = ["build_registry", "main"]
 
 
 # ----------------------------------------------------------------------

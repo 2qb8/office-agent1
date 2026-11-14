@@ -9,8 +9,10 @@ spec, and every step names a tool action plus its arguments. Steps can pass
 data to later steps with `$step.field` references, so reading a workbook,
 filtering rows, summarising them and writing a report is a few declarations.
 
-AI planning is not required. The planner modules are still present and wired
-to the runtime, but they are opt-in and unconfigured (see [AI planning](#ai-planning-later)).
+AI planning is not required: an instruction that carries a job spec never
+touches the network. When an instruction is plain prose, the model can plan
+it instead — set a provider once in the desktop window or on the command
+line (see [AI planning](#ai-planning-optional)).
 
 ## Desktop app (single file)
 
@@ -22,17 +24,29 @@ file, needs no Python and no installation. The same build is also attached
 to the `build-exe` workflow run as the `office-agent-windows` artifact,
 along with the command-line `office-agent.exe`.
 
+![The desktop window](docs/window.png)
+
 1. Double-click `office-agent-gui.exe`.
-2. **Browse…** to your instruction `.docx` (or `.txt` / `.md`).
+2. **Choose…** your instruction `.docx` (or `.txt` / `.md`).
 3. The output folder beside it appears in the window.
 4. Choose **English** or **Русский** — the choice is remembered.
 5. Press **Run**.
 
 The window logs every step, and **Open output folder** shows the generated
-files. The app runs the deterministic engine with AI off, so the instruction
-must contain a `steps` block; inputs referenced as `inputs/...` are read from
-folders beside the instruction file. The command-line executable
-(`office-agent.exe`) is in the same artifact.
+files. Instructions that contain a `steps` block run straight from the spec;
+inputs referenced as `inputs/...` are read from folders beside the
+instruction file. The command-line executable (`office-agent.exe`) is in the
+same artifact.
+
+### AI in the window
+
+Instructions written as plain prose need a model. Open the **AI planner**
+section of the window, pick a provider (OpenAI, Gemini, OpenRouter, a local
+Ollama server or any OpenAI-compatible endpoint), paste a key and press
+**Test connection**. The settings, including the key, are stored in your own
+user settings file (`~/.office-agent.json`, readable only by you) and are
+reused on the next launch. Leave the key empty and the app stays fully
+offline.
 
 Build both yourself with `python build_exe.py` (Windows, or Linux with
 `python3-tk` installed).

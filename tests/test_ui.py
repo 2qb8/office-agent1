@@ -11,9 +11,9 @@ from unittest import mock
 
 from docx import Document
 
-from agent import ui
+from agent import ai_config, ui
+from agent.registry import build_registry
 from agent.runtime import AgentRuntime
-from run import build_registry
 
 
 SPEC = """\
@@ -104,6 +104,75 @@ class SettingsTests(unittest.TestCase):
             os.environ, {ui.SETTINGS_ENV: str(self.path)}
         ):
             self.assertEqual(ui.load_settings(), {})
+
+    def test_ai_settings_round_trip(self):
+        values = {
+            "provider": "ollama",
+            "base_url": "http://localhost:11434/v1",
+            "model": "qwen2.5:3b",
+            "api_key": "secret",
+        }
+
+        with mock.patch.dict(
+            os.environ, {ui.SETTINGS_ENV: str(self.path)}
+        ):
+            ui.save_ai(values)
+
+            self.assertEqual(ui.remembered_ai(), values)
+
+            if os.name == "posix":
+                self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
+
+    def test_missing_ai_settings_are_empty(self):
+        with mock.patch.dict(
+            os.environ, {ui.SETTINGS_ENV: str(self.path)}
+        ):
+            self.assertEqual(ui.remembered_ai(), {})
+
+
+class AiEnvironmentTests(unittest.TestCase):
+    def test_values_reach_the_planner_and_clear_again(self):
+        with mock.patch.dict(os.environ, {},
+                             clear=False):
+            ai_config.apply_environment(
+                {
+                    "provider": "ollama",
+                    "base_url": "http://localhost:11434/v1",
+                    "model": "qwen2.5:3b",
+                    "api_key": "",
+                }
+            )
+
+            self.assertEqual(os.environ["LLM_PROVIDER"], "ollama")
+            self.assertNotIn("LLM_API_KEY", os.environ)
+            self.assertTrue(ai_config.configured())
+
+            ai_config.apply_environment({})
+
+            self.assertNotIn("LLM_PROVIDER", os.environ)
+            self.assertFalse(ai_config.configured())
+
+    def test_from_values_strips_whitespace(self):
+        config = ai_config.from_values(
+            {
+                "provider": " OpenAI ",
+                "base_url": " https://api.openai.com/v1 ",
+                "model": " gpt-4o-mini ",
+                "api_key": " key ",
+            }
+        )
+
+        self.assertEqual(config.provider, "openai")
+        self.assertEqual(config.model, "gpt-4o-mini")
+        self.assertEqual(config.api_key, "key")
+
+
+class RegistryTests(unittest.TestCase):
+    def test_default_registry_has_every_tool(self):
+        self.assertEqual(
+            build_registry().list_tools(),
+            ["excel", "filesystem", "screenshot", "table", "text", "word"],
+        )
 
 
 class DescribeStateTests(unittest.TestCase):
@@ -202,7 +271,11 @@ class GuiWindowTests(unittest.TestCase):
             {
                 ui.SETTINGS_ENV: str(
                     Path(self._settings.name) / "settings.json"
-                )
+                ),
+                "LLM_PROVIDER": "",
+                "LLM_BASE_URL": "",
+                "LLM_MODEL": "",
+                "LLM_API_KEY": "",
             },
         )
         patcher.start()
@@ -271,3 +344,22 @@ class GuiWindowTests(unittest.TestCase):
             self.window.status_var.get(),
             ui.text(self.window.language, "no_instruction"),
         )
+
+    def test_ai_section_opens_on_a_preset(self):
+        self.assertIn(
+            self.window.provider_var.get(),
+            self.window.provider_by_label,
+        )
+        self.assertTrue(self.window.ai_status_var.get().strip())
+
+    def test_ai_choice_is_saved_and_becomes_usable(self):
+        self.window.provider_var.set("Ollama (local)")
+        self.window.on_provider_change()
+        self.window._persist_ai()
+
+        saved = ui.remembered_ai()
+
+        self.assertEqual(saved["provider"], "ollama")
+        self.assertEqual(saved["base_url"], "http://localhost:11434/v1")
+        self.assertEqual(saved["model"], "qwen2.5:3b")
+        self.assertTrue(ai_config.configured())

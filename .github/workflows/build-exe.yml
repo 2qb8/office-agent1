@@ -46,28 +46,13 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Publish failure log
-        if: failure()
-        shell: bash
+      - name: Open the desktop window
         run: |
-          {
-            echo "Test failure report for ${GITHUB_SHA}"
-            echo
-            grep -E "^(FAIL|ERROR):|^(Ran|FAILED|OK)" tests.log || true
-            echo
-            echo "--- tail ---"
-            tail -n 80 tests.log || echo "no tests.log"
-          } > ci-tests.log
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -B ci-report
-          git add -f ci-tests.log
-          git commit -m "CI test failure report" || true
-          git push --force origin ci-report
+          python -c "import tkinter, gui; root = tkinter.Tk(); window = gui.OfficeAgentWindow(root); root.update_idletasks(); print('window ok', root.winfo_width(), root.winfo_height()); root.destroy()"
 
-      - name: Smoke test the desktop window
+      - name: Capture a screenshot of the window
         continue-on-error: true
-        run: python -c "import tkinter, gui; root = tkinter.Tk(); gui.OfficeAgentWindow(root); root.update_idletasks(); root.destroy(); print('window ok')"
+        run: python assets/window_shot.py
 
       - name: Build executables
         run: python build_exe.py
@@ -98,23 +83,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f dist/office-agent-gui.exe
+          if [ -f docs/window.png ]; then git add -f docs/window.png; fi
           if git diff --cached --quiet; then
             echo "office-agent-gui.exe is unchanged"
             exit 0
           fi
           git commit -m "Publish office-agent-gui.exe from ${GITHUB_SHA:0:7} [skip ci]"
           git push origin HEAD:main
-
-      - name: Publish build manifest
-        shell: bash
-        run: |
-          cp dist/build-manifest.txt build-manifest.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -B ci-build
-          git add -f build-manifest.txt
-          git commit -m "Build manifest for ${GITHUB_SHA}" || true
-          git push --force origin ci-build
 
   release:
     needs: windows

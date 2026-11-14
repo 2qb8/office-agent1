@@ -5,13 +5,17 @@
 #   python build_exe.py
 #
 # Produces dist/office-agent-gui (dist\office-agent-gui.exe on Windows):
-# a single windowed file with Python, Tkinter, the agent packages and the
-# docx/xlsx dependencies bundled.
+# a single windowed file with Python, Tkinter, the agent packages, the
+# docx/xlsx dependencies and the window icon bundled.
 
 from PyInstaller.utils.hooks import collect_data_files
 
 
-datas = collect_data_files("docx") + collect_data_files("openpyxl")
+datas = (
+    collect_data_files("docx")
+    + collect_data_files("openpyxl")
+    + [("assets", "assets")]
+)
 
 a = Analysis(
     ["gui.py"],
@@ -44,4 +48,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon="assets/office-agent.ico",
 )

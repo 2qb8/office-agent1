@@ -18,3 +18,28 @@ class ToolRegistry:
 
     def list_tools(self) -> list[str]:
         return sorted(self._tools.keys())
+
+
+def build_registry() -> ToolRegistry:
+    """The registry every entry point uses: the command line and the window."""
+
+    from tools.excel import ExcelTool
+    from tools.filesystem import FilesystemTool
+    from tools.screenshot import ScreenshotTool
+    from tools.table import TableTool
+    from tools.text import TextTool
+    from tools.word import WordTool
+
+    registry = ToolRegistry()
+
+    for tool in (
+        ExcelTool(),
+        WordTool(),
+        TextTool(),
+        TableTool(),
+        FilesystemTool(),
+        ScreenshotTool(),
+    ):
+        registry.register(tool)
+
+    return registry
