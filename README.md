@@ -17,12 +17,25 @@ line (see [AI planning](#ai-planning-optional)).
 ## Desktop app (single file)
 
 If you just want to run a job without a terminal, download
-[`dist/office-agent-gui.exe`](dist/office-agent-gui.exe) straight from this
-repository. The Windows workflow rebuilds it on every successful push and
-commits it there, so the file in the repo is the latest build. It is one
-file, needs no Python and no installation. The same build is also attached
-to the `build-exe` workflow run as the `office-agent-windows` artifact,
-along with the command-line `office-agent.exe`.
+[`office-agent-gui.exe`](https://github.com/2qb8/office-agent1/releases/latest/download/office-agent-gui.exe).
+It is one file, needs no Python and no installation.
+
+Every successful Windows run publishes a release for the version in
+`agent/__init__.py`: both executables, `SHA256SUMS.txt`, and the changes
+since the previous release in the notes. Bumping the version is what makes
+a new release. The same two files are attached to each workflow run as the
+`office-agent-windows` artifact.
+
+To check a download before running it:
+
+```
+certutil -hashfile office-agent-gui.exe SHA256
+```
+
+and compare the result with `SHA256SUMS.txt` from the same release. The
+executable is unsigned unless signing secrets are configured (see
+[Code signing](#code-signing)); Windows SmartScreen therefore shows
+"More info" → "Run anyway" the first time.
 
 ![The desktop window](docs/window.png)
 
@@ -50,6 +63,21 @@ offline.
 
 Build both yourself with `python build_exe.py` (Windows, or Linux with
 `python3-tk` installed).
+
+### Code signing
+
+The release build signs both executables when the repository has these two
+secrets, and explains that it is skipping them when it does not:
+
+| Secret | Value |
+| --- | --- |
+| `WINDOWS_CERT_PFX` | your `.pfx` code-signing certificate, base64-encoded |
+| `WINDOWS_CERT_PASSWORD` | the password for that `.pfx` |
+
+Signing turns the SmartScreen "Unknown publisher" warning into your name on
+the UAC prompt, which is the difference between a user double-clicking the
+file and abandoning it. Nothing else in the workflow changes: the release
+step uploads whatever `dist/` holds.
 
 ## Setup
 

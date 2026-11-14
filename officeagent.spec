@@ -44,4 +44,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    # Written by assets/make_version_info.py during the build.
+    version="assets/version_info_cli.txt",
 )

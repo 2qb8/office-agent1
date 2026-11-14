@@ -15,6 +15,8 @@ datas = (
     collect_data_files("docx")
     + collect_data_files("openpyxl")
     + [("assets", "assets")]
+    # The example a new user can run without finding a file first.
+    + [("examples/sales-pack", "examples/sales-pack")]
 )
 
 a = Analysis(
@@ -49,4 +51,7 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon="assets/office-agent.ico",
+    # Written by assets/make_version_info.py during the build, so Explorer
+    # shows a product name and a version in the file properties.
+    version="assets/version_info_gui.txt",
 )

@@ -30,6 +30,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 BUILDS = (
     ("officeagent.spec", "office-agent"),
     ("officeagent-gui.spec", "office-agent-gui"),
@@ -76,6 +79,12 @@ def main() -> int:
         f"Building with PyInstaller {PyInstaller.__version__} "
         f"on {system} {platform.machine()}"
     )
+
+    # File properties: product name, version and description in Explorer.
+    from assets.make_version_info import write_all as write_version_info
+
+    for written in write_version_info():
+        print(f"wrote {written.relative_to(ROOT)}")
 
     suffix = ".exe" if system == "Windows" else ""
 

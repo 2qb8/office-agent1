@@ -13,4 +13,5 @@ examples/*/run.log
 examples/*/report.json
 dist/
 build/
+assets/version_info_*.txt
 /.env

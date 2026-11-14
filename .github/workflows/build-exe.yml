@@ -5,20 +5,25 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
+
+# A green run on main publishes a release for the version in
+# agent/__init__.py: tag v<version>, both executables, SHA256SUMS.txt and
+# changelog notes. Bumping the version is what creates a new release; the
+# executable is never committed to the repository.
 
 jobs:
   windows:
     runs-on: windows-latest
-    # The publish step commits the executable to main; skip that bot push so
-    # it does not start another build.
+    # Bot commits (failure report, screenshot) must not start another build.
     if: github.actor != 'github-actions[bot]'
     permissions:
       contents: write
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Tags and the full history, for the release changelog.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -90,6 +95,13 @@ jobs:
         continue-on-error: true
         run: python assets/window_shot.py
 
+      # Compared against a deliberately committed reference, so a layout
+      # regression shows up as a failed step with a diff image attached.
+      - name: Compare the window against the golden screenshot
+        continue-on-error: true
+        run: |
+          python assets/compare_shot.py docs/window.png docs/window-golden.png
+
       - name: Build executables
         run: python build_exe.py
 
@@ -104,6 +116,31 @@ jobs:
       - name: Smoke test command line executable
         run: dist\office-agent.exe tools
 
+      # The windowed executable has no console, so it proves itself through
+      # its exit code and the files it writes. This is the only check that
+      # exercises the frozen bundle end to end: bundled assets, docx and
+      # openpyxl data files, Tk imports and the bootloader.
+      - name: Self-test the desktop executable
+        shell: pwsh
+        run: |
+          $job = Join-Path $env:TEMP "office-agent-selftest"
+          Remove-Item -Recurse -Force $job -ErrorAction SilentlyContinue
+          Copy-Item examples\sales-pack $job -Recurse
+          $watch = [Diagnostics.Stopwatch]::StartNew()
+          $process = Start-Process -FilePath dist\office-agent-gui.exe `
+            -ArgumentList @("--self-test", $job) -Wait -PassThru
+          $watch.Stop()
+          "exit code: $($process.ExitCode) after $([math]::Round($watch.Elapsed.TotalSeconds, 1))s"
+          Get-Content (Join-Path $job "self-test.txt") -ErrorAction SilentlyContinue
+          if ($process.ExitCode -ne 0) {
+            throw "office-agent-gui.exe --self-test failed with $($process.ExitCode)."
+          }
+          $created = @(Get-ChildItem (Join-Path $job "output") -File -Recurse -ErrorAction SilentlyContinue)
+          if ($created.Count -eq 0) {
+            throw "The desktop executable ran but produced no output files."
+          }
+          $created | Format-Table Name, Length
+
       - uses: actions/upload-artifact@v4
         with:
           name: office-agent-windows
@@ -111,21 +148,96 @@ jobs:
             dist/office-agent.exe
             dist/office-agent-gui.exe
             dist/build-manifest.txt
+            docs/window.png
+            docs/window-diff.png
           if-no-files-found: error
 
-      - name: Publish executable to main
+      - name: Publish the window screenshot
+        if: github.ref == 'refs/heads/main'
         shell: bash
         run: |
+          [ -f docs/window.png ] || exit 0
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f dist/office-agent-gui.exe
-          if [ -f docs/window.png ]; then git add -f docs/window.png; fi
+          git add -f docs/window.png
           if git diff --cached --quiet; then
-            echo "office-agent-gui.exe is unchanged"
+            echo "Screenshot is unchanged"
             exit 0
           fi
-          git commit -m "Publish office-agent-gui.exe from ${GITHUB_SHA:0:7} [skip ci]"
-          git push origin HEAD:main
+          git commit -m "Update the window screenshot from ${GITHUB_SHA:0:7} [skip ci]"
+          git push origin HEAD:main || true
+
+      # Unsigned downloads trigger SmartScreen. Adding the two secrets named
+      # below signs the executables without changing anything else; without
+      # them the step explains itself and the release stays checksum-only.
+      - name: Sign the executables
+        shell: bash
+        env:
+          CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          if [ -z "$CERT_PFX" ]; then
+            echo "No certificate configured: the executables stay unsigned."
+            echo "Add WINDOWS_CERT_PFX (a base64 .pfx) and WINDOWS_CERT_PASSWORD"
+            echo "to sign them; see README, 'Code signing'."
+            exit 0
+          fi
+          SIGNTOOL=$(ls "/c/Program Files (x86)/Windows Kits/10/bin"/*/x64/signtool.exe 2>/dev/null | tail -1)
+          if [ -z "$SIGNTOOL" ]; then
+            echo "signtool.exe not found on this runner." >&2
+            exit 1
+          fi
+          echo "$CERT_PFX" | base64 -d > "$RUNNER_TEMP/cert.pfx"
+          "$SIGNTOOL" sign /fd sha256 /f "$RUNNER_TEMP/cert.pfx" \
+            /p "$CERT_PASSWORD" /tr http://timestamp.digicert.com /td sha256 \
+            dist/office-agent.exe dist/office-agent-gui.exe
+          rm -f "$RUNNER_TEMP/cert.pfx"
+
+      - name: Publish the release
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          version=$(python -c "import agent; print(agent.__version__)")
+          tag="v$version"
+          if git ls-remote --tags origin "refs/tags/$tag" | grep -q "refs/tags/$tag$"; then
+            echo "Release $tag already exists."
+            echo "Bump the version in agent/__init__.py and pyproject.toml to publish a new one."
+            exit 0
+          fi
+          (cd dist && sha256sum office-agent.exe office-agent-gui.exe > SHA256SUMS.txt)
+          cat dist/SHA256SUMS.txt
+          base=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          if [ -n "$base" ]; then
+            range="$base..HEAD"
+          else
+            range="HEAD~20..HEAD"
+          fi
+          {
+            echo "Windows desktop app, version $version."
+            echo
+            echo "Download \`office-agent-gui.exe\` and double-click it. No Python,"
+            echo "no installer. \`office-agent.exe\` is the same engine on the command line."
+            echo
+            echo "Check the download against \`SHA256SUMS.txt\`:"
+            echo
+            echo '```'
+            echo "certutil -hashfile office-agent-gui.exe SHA256"
+            echo '```'
+            echo
+            echo "## Changes"
+            echo
+            git log --pretty='- %s' "$range" | grep -v '\[skip ci\]' | head -40 || true
+          } > release-notes.md
+          gh release create "$tag" \
+            --target "$GITHUB_SHA" \
+            --title "Office Agent $version" \
+            --notes-file release-notes.md \
+            dist/office-agent.exe \
+            dist/office-agent-gui.exe \
+            dist/SHA256SUMS.txt
 
       - name: Clear the failure report
         if: success()
@@ -138,22 +250,3 @@ jobs:
             git commit -m "Windows tests pass again on ${GITHUB_SHA:0:7} [skip ci]"
             git push origin HEAD:main || true
           fi
-
-  release:
-    needs: windows
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: office-agent-windows
-          path: dist
-
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/office-agent.exe
-            dist/office-agent-gui.exe
