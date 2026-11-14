@@ -167,6 +167,13 @@ jobs:
             throw
           }
 
+          $narrator = Join-Path $env:TEMP "office-agent-selftest.txt"
+          if (Test-Path $narrator) {
+            Say "--- office-agent-selftest.txt"
+            (Get-Content $narrator) | ForEach-Object { Say $_ }
+            Copy-Item $narrator "dist/self-test-crash.txt" -Force
+          }
+
           foreach ($name in @("self-test.txt", "self-test-crash.txt")) {
             $path = Join-Path $job $name
             if (Test-Path $path) {

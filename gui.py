@@ -1552,25 +1552,40 @@ def main() -> int:
     # No window, no console: the frozen desktop executable runs one job and
     # reports through its exit code. CI uses this to prove the bundle works.
     if argv[:1] == ["--self-test"]:
-        if len(argv) < 2:
-            return 2
+        # A windowed build has no console, so the self-test narrates itself
+        # into a file in the system temp folder as well as into the job.
+        import tempfile
 
-        job = Path(argv[1])
+        diag = Path(tempfile.gettempdir()) / "office-agent-selftest.txt"
+        notes = [f"argv: {argv!r}", f"cwd: {os.getcwd()}"]
+
+        def flush() -> None:
+            for target in (diag, job / "self-test-crash.txt"):
+                try:
+                    target.write_text(
+                        "\n".join(notes) + "\n",
+                        encoding="utf-8",
+                    )
+                except OSError:
+                    pass
+
+        job = Path(argv[1]) if len(argv) > 1 else Path(".")
 
         try:
-            return self_test(job)
+            notes.append(f"job: {job}")
+            flush()
+
+            code = self_test(job)
+
+            notes.append(f"exit code: {code}")
+            flush()
+
+            return code
         except BaseException:
-            # There is no console in the windowed build, so leave the
-            # traceback where CI (and a user) can read it.
             import traceback
 
-            try:
-                (job / "self-test-crash.txt").write_text(
-                    traceback.format_exc(),
-                    encoding="utf-8",
-                )
-            except OSError:
-                pass
+            notes.append(traceback.format_exc())
+            flush()
 
             return 1
 
