@@ -100,6 +100,38 @@ class LlmClientTests(unittest.TestCase):
         self.assertEqual(payload["temperature"], 0.25)
         self.assertEqual(payload["max_tokens"], 16)
 
+    def test_errors_carry_the_status_and_the_provider_message(self):
+        with mock.patch(
+            "agent.llm.requests.post",
+            return_value=FakeResponse(401, text="invalid key"),
+        ):
+            with self.assertRaises(LLMError) as caught:
+                self.client().generate("Hello")
+
+        error = caught.exception
+
+        self.assertEqual(error.status, 401)
+        self.assertEqual(error.detail, "invalid key")
+        self.assertEqual(error.reason, "HTTP 401: invalid key")
+        self.assertIn("All configured LLM models failed", str(error))
+
+    def test_network_errors_carry_no_status(self):
+        import requests as requests_module
+
+        with mock.patch(
+            "agent.llm.requests.post",
+            side_effect=requests_module.exceptions.ConnectionError("down"),
+        ):
+            with self.assertRaises(LLMError) as caught:
+                self.client().generate("Hello")
+
+        error = caught.exception
+
+        self.assertIsNone(error.status)
+        self.assertEqual(error.kind, "network")
+        self.assertEqual(error.detail, "down")
+        self.assertEqual(error.reason, "network error: down")
+
     def test_local_client_sends_no_authorization_header(self):
         with mock.patch(
             "agent.llm.requests.post",
@@ -275,10 +307,12 @@ class AiConfigTests(unittest.TestCase):
             "agent.llm.requests.post",
             return_value=FakeResponse(401, text="denied"),
         ):
-            ok, detail = ai_config.test_connection(config)
+            check = ai_config.test_connection(config)
 
-        self.assertFalse(ok)
-        self.assertIn("401", detail)
+        self.assertFalse(check.ok)
+        self.assertEqual(check.status, 401)
+        self.assertEqual(check.detail, "denied")
+        self.assertEqual(check.summary, "HTTP 401: denied")
 
 
 AI_PLAN = {

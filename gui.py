@@ -732,9 +732,11 @@ class OfficeAgentWindow:
         ).start()
 
     def _test_ai(self, values: dict[str, str]) -> None:
-        ok, detail = test_ai_connection(values)
+        check = test_ai_connection(values)
 
-        self.messages.put(("ai_ok" if ok else "ai_fail", detail, None))
+        self.messages.put(
+            ("ai_ok" if check.ok else "ai_fail", check.summary, None)
+        )
 
     # ------------------------------------------------------------------
     # Running

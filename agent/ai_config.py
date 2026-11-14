@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from agent.llm import LLMError, OpenAICompatibleLLM
+from agent.llm import LLMError, OpenAICompatibleLLM, error_line
 from agent.llm_factory import PROVIDERS, resolve_settings
 
 
@@ -198,11 +198,33 @@ def write_config(
     return path
 
 
+@dataclass(frozen=True)
+class ConnectionCheck:
+    """The result of one tiny request, as data rather than a sentence."""
+
+    ok: bool
+
+    # The model's reply on success, the provider's own message on failure.
+    detail: str = ""
+
+    status: int | None = None
+    kind: str = "http"
+
+    @property
+    def summary(self) -> str:
+        """The short line the window and the command line show."""
+
+        if self.ok:
+            return " ".join(self.detail.split()) or "(empty reply)"
+
+        return error_line(self.status, self.detail, self.kind)
+
+
 def test_connection(
     config: AiConfig,
     timeout: int = 60,
-) -> tuple[bool, str]:
-    """Send one tiny request; returns (ok, detail)."""
+) -> ConnectionCheck:
+    """Send one tiny request and report it; never raises."""
 
     client = OpenAICompatibleLLM(
         base_url=config.base_url,
@@ -218,6 +240,14 @@ def test_connection(
             max_tokens=8,
         )
     except LLMError as exc:
-        return False, str(exc)[:500]
+        return ConnectionCheck(
+            ok=False,
+            detail=exc.detail[:500],
+            status=exc.status,
+            kind=exc.kind,
+        )
 
-    return True, " ".join(reply.split())[:80] or "(empty reply)"
+    return ConnectionCheck(
+        ok=True,
+        detail=" ".join(reply.split())[:80],
+    )

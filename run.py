@@ -252,15 +252,15 @@ def ai_setup(arguments: argparse.Namespace) -> int:
         api_key=api_key,
     )
 
-    ok, detail = ai_config.test_connection(config)
+    check = ai_config.test_connection(config)
 
     print()
 
-    if ok:
-        print(f"Connection OK (model replied: {detail})")
+    if check.ok:
+        print(f"Connection OK (model replied: {check.summary})")
         return 0
 
-    print(f"Connection failed: {detail}")
+    print(f"Connection failed: {check.summary}")
     return 1
 
 
@@ -275,13 +275,13 @@ def ai_test() -> int:
 
     print("Contacting the AI endpoint...")
 
-    ok, detail = ai_config.test_connection(ai_config.resolve())
+    check = ai_config.test_connection(ai_config.resolve())
 
-    if ok:
-        print(f"Connection OK (model replied: {detail})")
+    if check.ok:
+        print(f"Connection OK (model replied: {check.summary})")
         return 0
 
-    print(f"Connection failed: {detail}")
+    print(f"Connection failed: {check.summary}")
     return 1
 
 

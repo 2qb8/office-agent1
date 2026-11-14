@@ -15,7 +15,7 @@ import requests
 from docx import Document
 
 from agent import ai_config, desktop, ui
-from agent.llm import LLM
+from agent.llm import LLM, LLMError
 from agent.llm_factory import resolve_settings
 from agent.registry import build_registry
 from agent.runtime import AgentRuntime
@@ -506,10 +506,11 @@ class ConnectionTestTests(unittest.TestCase):
             "agent.llm.requests.post",
             return_value=FakeHttpResponse(200, chat_reply("OK")),
         ) as post:
-            ok, detail = desktop.test_ai_connection(OPENAI_ENV)
+            check = desktop.test_ai_connection(OPENAI_ENV)
 
-        self.assertTrue(ok)
-        self.assertEqual(detail, "OK")
+        self.assertTrue(check.ok)
+        self.assertEqual(check.summary, "OK")
+        self.assertIsNone(check.status)
 
         url = post.call_args.args[0]
         options = post.call_args.kwargs
@@ -531,11 +532,16 @@ class ConnectionTestTests(unittest.TestCase):
             "agent.llm.requests.post",
             return_value=FakeHttpResponse(401, text=body),
         ):
-            ok, detail = desktop.test_ai_connection(OPENAI_ENV)
+            check = desktop.test_ai_connection(OPENAI_ENV)
 
-        self.assertFalse(ok)
+        self.assertFalse(check.ok)
+        self.assertEqual(check.status, 401)
         self.assertEqual(
-            detail,
+            check.detail,
+            '{"error": {"message": "Incorrect API key provided"}}',
+        )
+        self.assertEqual(
+            check.summary,
             'HTTP 401: {"error": {"message": "Incorrect API key provided"}}',
         )
 
@@ -546,36 +552,46 @@ class ConnectionTestTests(unittest.TestCase):
                 "getaddrinfo failed"
             ),
         ):
-            ok, detail = desktop.test_ai_connection(OPENAI_ENV)
+            check = desktop.test_ai_connection(OPENAI_ENV)
 
-        self.assertFalse(ok)
-        self.assertEqual(detail, "network error: getaddrinfo failed")
+        self.assertFalse(check.ok)
+        self.assertIsNone(check.status)
+        self.assertEqual(check.kind, "network")
+        self.assertEqual(check.summary, "network error: getaddrinfo failed")
 
 
-class BriefErrorMessageTests(unittest.TestCase):
-    """The panel shows one line, not the client's per-model report."""
+class ErrorLineTests(unittest.TestCase):
+    """The short line comes from fields, never from the client's wording."""
 
-    def test_drops_the_summary_and_the_model_prefix(self):
-        self.assertEqual(
-            desktop.brief_error(
-                "All configured LLM models failed:\n"
-                'gpt-4o-mini: HTTP 401: {"error": "bad key"}'
-            ),
-            'HTTP 401: {"error": "bad key"}',
+    def test_http_status_with_the_provider_message(self):
+        error = LLMError(
+            "All configured LLM models failed:\n whatever",
+            status=401,
+            detail='{"error": "bad key"}',
         )
 
-    def test_drops_a_repeated_model_name_before_a_network_error(self):
+        self.assertEqual(error.reason, 'HTTP 401: {"error": "bad key"}')
         self.assertEqual(
-            desktop.brief_error(
-                "All configured LLM models failed:\n"
-                "some/model: some/model failed after 1 attempts: "
-                "network error: timed out"
-            ),
-            "network error: timed out",
+            LLMError("x", status=503, detail="overloaded").reason,
+            "HTTP 503: overloaded",
         )
 
-    def test_leaves_a_plain_reply_alone(self):
-        self.assertEqual(desktop.brief_error("OK"), "OK")
+    def test_network_failure_without_a_status(self):
+        error = LLMError("wrapped text", detail="timed out", kind="network")
+
+        self.assertEqual(error.reason, "network error: timed out")
+
+    def test_unusable_reply_keeps_the_provider_message(self):
+        error = LLMError(
+            "wrapped text",
+            detail="invalid successful response: no choices",
+            kind="response",
+        )
+
+        self.assertEqual(
+            error.reason,
+            "invalid successful response: no choices",
+        )
 
 
 class ConfigCheckingFactoryTests(unittest.TestCase):

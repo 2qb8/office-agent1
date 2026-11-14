@@ -7,8 +7,56 @@ from typing import Any
 import requests
 
 
+def error_line(
+    status: int | None,
+    detail: str,
+    kind: str = "http",
+) -> str:
+    """One readable line from structured failure data.
+
+    ``status`` is the HTTP code when a response arrived, ``detail`` is the
+    provider's own message, and ``kind`` says whether the request reached
+    the provider at all. Panels and command output share this so the
+    wording cannot drift apart from the fields.
+    """
+
+    text = " ".join(str(detail).split())
+
+    if status is not None:
+        return f"HTTP {status}: {text}" if text else f"HTTP {status}"
+
+    if kind == "network":
+        return f"network error: {text}" if text else "network error"
+
+    return text or "no response"
+
+
 class LLMError(RuntimeError):
-    pass
+    """A failed model call, carrying what a panel needs to explain it.
+
+    The message text stays human-readable for logs; ``status``, ``detail``
+    and ``kind`` are the machine-readable facts, so callers never have to
+    parse the message.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        status: int | None = None,
+        detail: str = "",
+        kind: str = "http",
+    ) -> None:
+        super().__init__(message)
+
+        self.status = status
+        self.detail = detail
+        self.kind = kind
+
+    @property
+    def reason(self) -> str:
+        """The short line for a one-line status, e.g. "HTTP 401: ..."."""
+
+        return error_line(self.status, self.detail, self.kind)
 
 
 class LLM(ABC):
@@ -76,6 +124,7 @@ class OpenAICompatibleLLM(LLM):
                 models.append(fallback)
 
         errors: list[str] = []
+        failures: list[LLMError] = []
 
         for model in models:
             try:
@@ -88,10 +137,16 @@ class OpenAICompatibleLLM(LLM):
 
             except LLMError as exc:
                 errors.append(f"{model}: {exc}")
+                failures.append(exc)
+
+        first = failures[0]
 
         raise LLMError(
             "All configured LLM models failed:\n"
-            + "\n".join(errors)
+            + "\n".join(errors),
+            status=first.status,
+            detail=first.detail,
+            kind=first.kind,
         )
 
     def _generate_with_model(
@@ -123,6 +178,9 @@ class OpenAICompatibleLLM(LLM):
 
 
         last_error = "Unknown error"
+        last_status: int | None = None
+        last_detail = ""
+        last_kind = "http"
 
         retryable_statuses = {
             408,
@@ -155,6 +213,9 @@ class OpenAICompatibleLLM(LLM):
                 last_error = (
                     f"network error: {exc}"
                 )
+                last_status = None
+                last_detail = str(exc)
+                last_kind = "network"
 
                 if attempt >= self.max_attempts:
                     break
@@ -194,7 +255,9 @@ class OpenAICompatibleLLM(LLM):
                 except Exception as exc:
                     raise LLMError(
                         f"{model}: invalid successful response: "
-                        f"{exc}"
+                        f"{exc}",
+                        detail=str(exc),
+                        kind="response",
                     ) from exc
 
             # Do NOT waste retries on configuration/auth errors.
@@ -202,16 +265,23 @@ class OpenAICompatibleLLM(LLM):
                 body = response.text[:2000]
 
                 raise LLMError(
-                    f"HTTP {status}: {body}"
+                    f"HTTP {status}: {body}",
+                    status=status,
+                    detail=body,
                 )
 
-            last_error = (
-                f"HTTP {status}: "
-                f"{response.text[:2000]}"
-            )
+            last_status = status
+            last_detail = response.text[:2000]
+            last_kind = "http"
+
+            last_error = f"HTTP {status}: {last_detail}"
 
             if status not in retryable_statuses:
-                raise LLMError(last_error)
+                raise LLMError(
+                    last_error,
+                    status=status,
+                    detail=last_detail,
+                )
 
             if attempt >= self.max_attempts:
                 break
@@ -233,5 +303,8 @@ class OpenAICompatibleLLM(LLM):
         raise LLMError(
             f"{model} failed after "
             f"{self.max_attempts} attempts: "
-            f"{last_error}"
+            f"{last_error}",
+            status=last_status,
+            detail=last_detail,
+            kind=last_kind,
         )
