@@ -1,0 +1,29 @@
+Only present while the last Windows run failed; CI removes it
+once the run is green again. No sign-in needed to read this.
+
+Run:    https://github.com/2qb8/office-agent1/actions/runs/43547002561
+Commit: bb9ed699631a2b3d66c28d1c1358a96f3eb399b2
+
+Steps:
+  install=success
+  tests=success
+  window=success
+  screenshot=success
+  golden=failure
+  build=success
+  verify=success
+  cli=success
+  selftest=failure
+  upload=skipped
+  screenshot-publish=skipped
+  sign=skipped
+  release=skipped
+
+dist/:
+total 57085
+-rw-r--r-- 1 runneradmin 197121      138 Nov 14 02:35 build-manifest.txt
+-rwxr-xr-x 1 runneradmin 197121 30807722 Nov 14 02:35 office-agent-gui.exe
+-rwxr-xr-x 1 runneradmin 197121 27642339 Nov 14 02:35 office-agent.exe
+
+Self-test report:
+  (none)
