@@ -133,42 +133,61 @@ jobs:
         id: selftest
         shell: pwsh
         run: |
+          $diag = "dist/selftest-ci.log"
+          function Say($line) { $line; Add-Content -Path $diag -Value $line }
+          "self-test log for $env:GITHUB_SHA" | Set-Content $diag
+
           $job = Join-Path $env:TEMP "office-agent-selftest"
           Remove-Item -Recurse -Force $job -ErrorAction SilentlyContinue
           Copy-Item examples\sales-pack $job -Recurse
+          Say "job: $job"
+          Say ("job contents: " + ((Get-ChildItem $job | Select-Object -ExpandProperty Name) -join ", "))
 
-          "--- command line run of the same job, so a bad job is not taken for a bad bundle"
+          Say "--- command line run of the same job"
           & dist\office-agent.exe run $job
-          "command line exit code: $LASTEXITCODE"
+          Say "command line exit code: $LASTEXITCODE"
 
-          "--- desktop executable self-test"
+          Say "--- desktop executable self-test"
           $log = Join-Path $env:TEMP "office-agent-selftest.log"
           Remove-Item -Recurse -Force (Join-Path $job "output") -ErrorAction SilentlyContinue
+          $exe = (Resolve-Path dist\office-agent-gui.exe).Path
+          Say "exe: $exe"
           $watch = [Diagnostics.Stopwatch]::StartNew()
-          $process = Start-Process -FilePath (Resolve-Path dist\office-agent-gui.exe) `
-            -ArgumentList @("--self-test", "`"$job`"") -Wait -PassThru `
-            -RedirectStandardOutput $log -RedirectStandardError "$log.err"
-          $watch.Stop()
-          "desktop exit code: $($process.ExitCode) after $([math]::Round($watch.Elapsed.TotalSeconds, 1))s"
+          try {
+            $process = Start-Process -FilePath $exe `
+              -ArgumentList @("--self-test", $job) -Wait -PassThru `
+              -RedirectStandardOutput $log -RedirectStandardError "$log.err"
+            $watch.Stop()
+            Say "desktop exit code: $($process.ExitCode) after $([math]::Round($watch.Elapsed.TotalSeconds, 1))s"
+          }
+          catch {
+            $watch.Stop()
+            Say "Start-Process failed: $_"
+            Say ("job contents now: " + ((Get-ChildItem $job | Select-Object -ExpandProperty Name) -join ", "))
+            throw
+          }
 
           foreach ($name in @("self-test.txt", "self-test-crash.txt")) {
             $path = Join-Path $job $name
             if (Test-Path $path) {
-              "--- $name"
-              Get-Content $path
-              Copy-Item $path "dist\$name" -Force
+              Say "--- $name"
+              (Get-Content $path) | ForEach-Object { Say $_ }
+              Copy-Item $path "dist/$name" -Force
+            } else {
+              Say "missing: $name"
             }
           }
 
           foreach ($path in @($log, "$log.err")) {
             if ((Test-Path $path) -and (Get-Item $path).Length -gt 0) {
-              "--- $path"
-              Get-Content $path
+              Say "--- $path"
+              (Get-Content $path) | ForEach-Object { Say $_ }
             }
           }
 
-          if ($process.ExitCode -ne 0) {
-            throw "office-agent-gui.exe --self-test failed with $($process.ExitCode)."
+          $code = if ($process) { $process.ExitCode } else { -1 }
+          if ($code -ne 0) {
+            throw "office-agent-gui.exe --self-test failed with $code."
           }
 
           $created = @(Get-ChildItem (Join-Path $job "output") -File -Recurse -ErrorAction SilentlyContinue)
@@ -187,6 +206,7 @@ jobs:
             dist/build-manifest.txt
             dist/self-test.txt
             dist/self-test-crash.txt
+            dist/selftest-ci.log
             docs/window.png
             docs/window-diff.png
           if-no-files-found: error
@@ -330,6 +350,9 @@ jobs:
             echo "Self-test report:"
             cat dist/self-test.txt 2>/dev/null || echo "  (none)"
             cat dist/self-test-crash.txt 2>/dev/null || echo "  (no crash file)"
+            echo
+            echo "Self-test CI log:"
+            cat dist/selftest-ci.log 2>/dev/null || echo "  (none)"
           } > docs/step-failures.txt
           cat docs/step-failures.txt
           git config user.name "github-actions[bot]"
