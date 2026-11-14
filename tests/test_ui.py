@@ -694,7 +694,12 @@ class SelfTestTests(unittest.TestCase):
         self.assertIn("status: success", report)
         self.assertIn("[OK] write: ", report)
         self.assertTrue((self.job / "output" / "quick.txt").is_file())
-        self.assertIn(str(self.job / "output" / "quick.txt"), report)
+        # The report lists resolved paths; %TEMP% is a short 8.3 name on the
+        # Windows runner, so compare resolved paths.
+        self.assertIn(
+            str((self.job / "output" / "quick.txt").resolve()),
+            report,
+        )
 
     def test_a_plain_prose_instruction_without_ai_reports_failure(self):
         instruction = write_docx(
@@ -1298,6 +1303,9 @@ class GuiWindowTests(unittest.TestCase):
         self.window.use_instruction(instruction)
         self._use_openai()
 
+        # This test is about the run, not the preview dialog.
+        self.window.review_var.set(False)
+
         stub = StubPlanner()
         factory = ConfigCheckingFactory(stub, OPENAI_ENV)
 
@@ -1329,6 +1337,9 @@ class GuiWindowTests(unittest.TestCase):
 
         self.window.use_instruction(instruction)
         self._use_openai()
+
+        # This test is about the run, not the preview dialog.
+        self.window.review_var.set(False)
 
         factory = UnusedPlanner()
 
