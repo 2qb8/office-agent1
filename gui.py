@@ -12,7 +12,7 @@ from pathlib import Path
 from tkinter import filedialog, font as tkfont, ttk
 
 from agent import __version__, ai_config
-from agent.desktop import run_instruction, test_ai_connection
+from agent.desktop import run_instruction, self_test, test_ai_connection
 from agent.llm_factory import PROVIDERS
 from agent.ui import (
     APP_TITLE,
@@ -38,6 +38,30 @@ WINDOW_BG = "#eef2f7"
 MUTED = "#64748b"
 SUCCESS = "#15803d"
 FAILURE = "#b91c1c"
+
+
+def _enable_dpi_awareness() -> None:
+    """Draw sharp text on a scaled Windows display.
+
+    Without this Windows renders the window at 96 dpi and scales the bitmap
+    up, which is why untweaked Tk apps look blurry on a 150% screen. Tk
+    picks the real scaling up once the process is aware, and _center() keeps
+    the window the same physical size.
+    """
+
+    if not sys.platform.startswith("win"):
+        return
+
+    try:
+        import ctypes
+
+        try:
+            # Per-monitor aware, which is what a single-window app wants.
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        except Exception:
+            ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
 
 
 def asset_path(name: str) -> Path:
@@ -482,7 +506,19 @@ class OfficeAgentWindow:
             except tk.TclError:
                 continue
 
+    def _ui_scale(self) -> float:
+        """1.0 at 96 dpi, 1.5 at 144 dpi, so the window keeps its real size."""
+
+        try:
+            return max(1.0, min(2.0, self.root.winfo_fpixels("1i") / 96.0))
+        except tk.TclError:
+            return 1.0
+
     def _center(self, width: int, height: int) -> None:
+        scale = self._ui_scale()
+
+        width, height = int(width * scale), int(height * scale)
+
         try:
             screen_width = self.root.winfo_screenwidth()
             screen_height = self.root.winfo_screenheight()
@@ -1030,6 +1066,18 @@ def _label_for(provider: str) -> str:
 
 
 def main() -> int:
+    argv = sys.argv[1:]
+
+    # No window, no console: the frozen desktop executable runs one job and
+    # reports through its exit code. CI uses this to prove the bundle works.
+    if argv[:1] == ["--self-test"]:
+        if len(argv) < 2:
+            return 2
+
+        return self_test(Path(argv[1]))
+
+    _enable_dpi_awareness()
+
     try:
         root = tk.Tk()
     except tk.TclError as exc:

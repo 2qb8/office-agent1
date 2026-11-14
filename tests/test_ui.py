@@ -398,6 +398,63 @@ class ExplicitInstructionTests(unittest.TestCase):
                 AgentRuntime(job, build_registry())
 
 
+class SelfTestTests(unittest.TestCase):
+    """What `office-agent-gui.exe --self-test` reports to CI."""
+
+    def setUp(self):
+        self._temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temp.cleanup)
+
+        self.job = Path(self._temp.name) / "job"
+        self.job.mkdir(parents=True)
+
+        patcher = mock.patch.dict(
+            os.environ,
+            {
+                "LLM_PROVIDER": "",
+                "LLM_BASE_URL": "",
+                "LLM_MODEL": "",
+                "LLM_API_KEY": "",
+            },
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_a_successful_run_reports_zero_and_writes_what_it_did(self):
+        instruction = write_docx(
+            self.job / "instruction.docx",
+            SPEC.strip().splitlines(),
+        )
+
+        with redirect_stdout(io.StringIO()):
+            code = desktop.self_test(instruction)
+
+        self.assertEqual(code, 0)
+
+        report = (self.job / "self-test.txt").read_text(encoding="utf-8")
+
+        self.assertIn("result: done", report)
+        self.assertIn("status: success", report)
+        self.assertIn("[OK] write: ", report)
+        self.assertTrue((self.job / "output" / "quick.txt").is_file())
+        self.assertIn(str(self.job / "output" / "quick.txt"), report)
+
+    def test_a_plain_prose_instruction_without_ai_reports_failure(self):
+        instruction = write_docx(
+            self.job / "instruction.docx",
+            [PROSE],
+        )
+
+        with redirect_stdout(io.StringIO()):
+            code = desktop.self_test(instruction)
+
+        self.assertEqual(code, 1)
+        self.assertIn(
+            "result: nospec",
+            (self.job / "self-test.txt").read_text(encoding="utf-8"),
+        )
+
+
 class DesktopRunPathTests(unittest.TestCase):
     """The body of the window's Run button, without opening a window."""
 

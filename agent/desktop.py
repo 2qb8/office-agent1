@@ -13,7 +13,7 @@ from agent import ai_config
 from agent.registry import build_registry
 from agent.runtime import AgentRuntime
 from agent.spec import SpecError
-from agent.ui import instruction_job_dir
+from agent.ui import describe_state, instruction_job_dir
 
 
 def test_ai_connection(
@@ -69,3 +69,43 @@ def run_instruction(
 
     except Exception as exc:  # surfaced in the window, not a crash
         return "error", exc, []
+
+
+def self_test(instruction: Path) -> int:
+    """Run one job with no window and report through the exit code.
+
+    The windowed executable has no console, so this is how CI proves the
+    frozen bundle can really run a job: bundled assets, the docx template,
+    openpyxl's data files, Tk imports and the bootloader are all exercised.
+    The details land in ``self-test.txt`` beside the instruction.
+    """
+
+    kind, payload, outputs = run_instruction(instruction)
+
+    lines: list[str] = [f"result: {kind}"]
+
+    if kind == "done":
+        state = payload
+
+        lines.append(f"status: {state.status.value}")
+        lines.extend(describe_state(state))
+        lines.extend(outputs)
+
+        code = 0 if not state.failed_steps else 1
+
+        if state.failed_steps:
+            lines.append("failed: " + ", ".join(state.failed_steps))
+    else:
+        lines.append(f"detail: {payload}")
+        code = 1
+
+    try:
+        report = instruction_job_dir(instruction) / "self-test.txt"
+        report.write_text(
+            "\n".join(lines) + "\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+
+    return code
