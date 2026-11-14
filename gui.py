@@ -437,9 +437,12 @@ class OfficeAgentWindow:
 
         mono = self._mono_family()
 
+        # The log expands to fill the card, so this is only the minimum it
+        # demands; a smaller minimum is what lets the footer fit on a
+        # 1024x768 screen instead of being pushed off the bottom.
         self.log = tk.Text(
             self.log_card,
-            height=8,
+            height=4,
             wrap="word",
             state="disabled",
             borderwidth=0,
