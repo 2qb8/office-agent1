@@ -677,6 +677,11 @@ class GuiWindowTests(unittest.TestCase):
         self.addCleanup(self._destroy)
 
     def _destroy(self):
+        worker = getattr(self.window, "worker", None)
+
+        if worker is not None and worker.is_alive():
+            worker.join(10.0)
+
         try:
             self.root.destroy()
         except Exception:
@@ -732,14 +737,26 @@ class GuiWindowTests(unittest.TestCase):
         self.assertTrue(self.window.ai_status_var.get().strip())
 
     def _wait_for_run(self, timeout: float = 25.0) -> bool:
-        """Pump the window until the worker thread reports back."""
+        """Let the worker finish, then pump the window until it reports back.
 
-        deadline = time.time() + timeout
+        Joining first matters: a worker still alive when the test drops its
+        last reference can collect Tk on that thread and abort the process.
+        """
+
+        worker = self.window.worker
+
+        if worker is not None:
+            worker.join(timeout)
+
+            if worker.is_alive():
+                return False
+
+        deadline = time.time() + 5.0
 
         while time.time() < deadline:
             self.root.update()
 
-            if not self.window.running:
+            if not self.window.running and not self.window.testing:
                 return True
 
             time.sleep(0.02)
@@ -756,17 +773,7 @@ class GuiWindowTests(unittest.TestCase):
 
         self.window.test_connection()
 
-        deadline = time.time() + timeout
-
-        while time.time() < deadline:
-            self.root.update()
-
-            if not self.window.testing:
-                return True
-
-            time.sleep(0.02)
-
-        return False
+        return self._wait_for_run(timeout)
 
     def test_connection_button_reports_a_working_reply(self):
         self._use_openai()

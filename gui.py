@@ -60,6 +60,11 @@ class OfficeAgentWindow:
         self.poll_id: str | None = None
         self.testing = False
 
+        # The thread doing work right now. Kept so it can be joined before
+        # the window (and its Tk objects) goes away: a worker that outlives
+        # Tk can collect it on the wrong thread and abort the process.
+        self.worker: threading.Thread | None = None
+
         self.instruction_var = tk.StringVar()
         self.output_var = tk.StringVar()
         self.status_var = tk.StringVar()
@@ -725,11 +730,12 @@ class OfficeAgentWindow:
         self.test_button.configure(state="disabled")
         self.ai_status_var.set(text(self.language, "testing"))
 
-        threading.Thread(
+        self.worker = threading.Thread(
             target=self._test_ai,
             args=(values,),
             daemon=True,
-        ).start()
+        )
+        self.worker.start()
 
     def _test_ai(self, values: dict[str, str]) -> None:
         check = test_ai_connection(values)
@@ -788,11 +794,12 @@ class OfficeAgentWindow:
         )
         self._append("", None)
 
-        threading.Thread(
+        self.worker = threading.Thread(
             target=self._work,
             args=(instruction,),
             daemon=True,
-        ).start()
+        )
+        self.worker.start()
 
     def _work(self, instruction: Path) -> None:
         # A spec in the instruction always wins; AI is used only for
@@ -946,9 +953,16 @@ class OfficeAgentWindow:
             )
 
     def close(self) -> None:
-        """Stop polling before the widgets disappear."""
+        """Stop the worker and polling before the widgets disappear."""
 
         self.running = False
+
+        worker = self.worker
+
+        if worker is not None and worker.is_alive():
+            # It only posts to a queue, so it can end now rather than
+            # holding a reference to this window into Tk teardown.
+            worker.join(2.0)
 
         try:
             self._persist_ai()
