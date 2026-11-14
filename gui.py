@@ -476,6 +476,21 @@ class OfficeAgentWindow:
             foreground="#0f172a",
         )
 
+        # Inside the expanding card, so these cost the window no height: the
+        # log simply shows a little less.
+        tools = ttk.Frame(self.log_card, style="Body.TFrame")
+        tools.grid(row=1, column=0, columnspan=2, sticky="e", pady=(6, 0))
+
+        self.copy_button = ttk.Button(
+            tools,
+            command=self.copy_details,
+            state="disabled",
+        )
+        self.copy_button.grid(row=0, column=0)
+
+        self.log_button = ttk.Button(tools, command=self.open_run_log)
+        self.log_button.grid(row=0, column=1, padx=(8, 0))
+
     def _build_footer(self, parent: ttk.Frame) -> None:
         self.status_label = ttk.Label(
             parent,
@@ -540,24 +555,17 @@ class OfficeAgentWindow:
         self.progress.grid_remove()
 
         self.review_check = ttk.Checkbutton(
-            footer,
+            self.document_card,
             variable=self.review_var,
             command=self._on_review_toggle,
         )
         self.review_check.grid(
-            row=1, column=0, columnspan=2, sticky="w", pady=(8, 0)
-        )
-
-        self.copy_button = ttk.Button(
-            footer,
-            command=self.copy_details,
-            state="disabled",
-        )
-        self.copy_button.grid(row=1, column=3, sticky="e", pady=(8, 0))
-
-        self.log_button = ttk.Button(footer, command=self.open_run_log)
-        self.log_button.grid(
-            row=1, column=4, sticky="e", padx=(8, 0), pady=(8, 0)
+            row=4,
+            column=1,
+            columnspan=2,
+            sticky="w",
+            padx=(12, 0),
+            pady=(10, 0),
         )
 
     def _mono_family(self) -> str:
