@@ -147,6 +147,10 @@ class OfficeAgentWindow:
 
         self._refresh_ai_status()
 
+        # _build() measures an empty window; the labels are filled in now, so
+        # measure again or the right-hand column is clipped by the edge.
+        self._fit()
+
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
         self.poll_id = self.root.after(120, self._poll)
@@ -553,11 +557,12 @@ class OfficeAgentWindow:
             command=self._on_review_toggle,
         )
         self.review_check.grid(
-            row=3,
-            column=2,
+            row=4,
+            column=1,
+            columnspan=2,
             sticky="w",
-            padx=(16, 0),
-            pady=(6, 0),
+            padx=(12, 0),
+            pady=(8, 0),
         )
 
     def _mono_family(self) -> str:
@@ -618,7 +623,11 @@ class OfficeAgentWindow:
             width = max(900, self.root.winfo_reqwidth())
             height = max(740, self.root.winfo_reqheight())
 
+            screen_width = self.root.winfo_screenwidth()
             available = self.root.winfo_screenheight() - 60
+
+            if screen_width > 0:
+                width = min(width, screen_width - 40)
 
             if available > 0:
                 height = min(height, available)
