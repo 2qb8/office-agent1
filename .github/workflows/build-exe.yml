@@ -31,6 +31,9 @@ jobs:
 
       - name: Run tests
         shell: bash
+        # The window tests must really run here; a skipped suite is a failure.
+        env:
+          OFFICE_AGENT_REQUIRE_GUI: "1"
         run: |
           set -o pipefail
           python -m unittest discover -s tests -v 2>&1 | tee tests.log

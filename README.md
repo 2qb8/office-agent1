@@ -356,6 +356,11 @@ reading, and full job runs driven by a DOCX instruction — including
 a DOCX table feeding an XLSX and a CSV output, plus a job that reads
 text, appends to a document, renders a screenshot and attaches it.
 
+The window tests need Tk and a display, so they skip on a headless
+machine. The Windows build sets `OFFICE_AGENT_REQUIRE_GUI=1`, which turns
+those skips into failures: a released executable cannot pass CI without
+the window having been built, filled in and run.
+
 `tests/test_actions.py` has one test per advertised tool action, plus a
 meta-test that fails when an action has no test or is not wired into the
 tool's `run()`. `tests/test_ui.py` covers the desktop app's translations,

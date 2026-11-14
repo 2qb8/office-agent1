@@ -20,6 +20,29 @@ from agent.registry import build_registry
 from agent.runtime import AgentRuntime
 
 
+# Set to 1 where the window must really be exercised (the Windows build):
+# a missing Tk or display then fails the test instead of skipping it.
+REQUIRE_GUI_ENV = "OFFICE_AGENT_REQUIRE_GUI"
+
+
+def gui_is_required() -> bool:
+    value = os.environ.get(REQUIRE_GUI_ENV, "").strip().lower()
+
+    return value in {"1", "true", "yes", "on"}
+
+
+def unavailable_gui(test: unittest.TestCase, reason: str) -> None:
+    """Skip the window test, or fail it when this run must cover it."""
+
+    if gui_is_required():
+        test.fail(
+            "this run must exercise the desktop window, but "
+            f"{reason}. Set {REQUIRE_GUI_ENV}=0 to allow skipping."
+        )
+
+    test.skipTest(reason)
+
+
 SPEC = """\
 steps:
   - id: write
@@ -491,7 +514,7 @@ class GuiModuleTests(unittest.TestCase):
 
     def test_gui_window_class_exists(self):
         if importlib.util.find_spec("tkinter") is None:
-            self.skipTest("tkinter is not installed")
+            unavailable_gui(self, "tkinter is not installed")
 
         import gui
 
@@ -504,7 +527,7 @@ class GuiWindowTests(unittest.TestCase):
 
     def setUp(self):
         if importlib.util.find_spec("tkinter") is None:
-            self.skipTest("tkinter is not installed")
+            unavailable_gui(self, "tkinter is not installed")
 
         self._settings = tempfile.TemporaryDirectory()
         self.addCleanup(self._settings.cleanup)
@@ -529,7 +552,7 @@ class GuiWindowTests(unittest.TestCase):
         try:
             self.root = tk.Tk()
         except Exception as exc:
-            self.skipTest(f"no display: {exc}")
+            unavailable_gui(self, f"there is no display ({exc})")
 
         self.root.withdraw()
 
