@@ -76,6 +76,25 @@ STRINGS: dict[str, dict[str, str]] = {
         "planning_ai": "Planning with {provider} ({model})…",
         "spec_found": "Instruction contains a job spec; running it directly.",
         "settings_saved": "Settings are saved automatically.",
+        "stop": "Stop",
+        "stopping": "Stopping after this step…",
+        "stopped": "Stopped — {count} file(s) created before stopping.",
+        "review_plan": "Review the plan before running",
+        "plan_title": "Plan for this instruction",
+        "plan_goal": "Goal: {goal}",
+        "plan_count": "Steps: {count}",
+        "plan_start": "Run this plan",
+        "plan_cancel": "Cancel",
+        "copy_details": "Copy details",
+        "copied": "Details copied to the clipboard.",
+        "open_log": "Open run log",
+        "no_log": "No run log yet.",
+        "busy": "This folder is already running in another window.",
+        "recent": "Recent",
+        "recent_empty": "No recent instructions",
+        "example": "Try an example",
+        "example_copied": "Example copied to {path} — press Run.",
+        "example_failed": "Could not copy the example: {error}",
     },
     "ru": {
         "subtitle": "Документ с инструкцией на входе — готовые файлы на выходе.",
@@ -125,6 +144,25 @@ STRINGS: dict[str, dict[str, str]] = {
         "planning_ai": "Планирование с {provider} ({model})…",
         "spec_found": "В инструкции есть задание — выполняем его напрямую.",
         "settings_saved": "Настройки сохраняются автоматически.",
+        "stop": "Остановить",
+        "stopping": "Останавливаемся после текущего шага…",
+        "stopped": "Остановлено — создано файлов: {count}.",
+        "review_plan": "Показывать план перед запуском",
+        "plan_title": "План для этой инструкции",
+        "plan_goal": "Цель: {goal}",
+        "plan_count": "Шагов: {count}",
+        "plan_start": "Выполнить план",
+        "plan_cancel": "Отмена",
+        "copy_details": "Копировать детали",
+        "copied": "Детали скопированы в буфер обмена.",
+        "open_log": "Открыть журнал выполнения",
+        "no_log": "Журнала пока нет.",
+        "busy": "Эта папка уже выполняется в другом окне.",
+        "recent": "Недавние",
+        "recent_empty": "Пока нет недавних инструкций",
+        "example": "Попробовать пример",
+        "example_copied": "Пример скопирован в {path} — нажмите «Запустить».",
+        "example_failed": "Не удалось скопировать пример: {error}",
     },
 }
 
@@ -217,6 +255,44 @@ def save_ai(values: dict[str, str]) -> None:
             for field in AI_FIELDS
         }
     )
+
+
+RECENT_LIMIT = 5
+
+
+def remembered_review() -> bool:
+    """Whether the window shows the plan before running it."""
+
+    value = load_settings().get("review_plan")
+
+    return True if value is None else bool(value)
+
+
+def save_review(enabled: bool) -> None:
+    save_settings(review_plan=bool(enabled))
+
+
+def remembered_recent() -> list[str]:
+    stored = load_settings().get("recent")
+
+    if not isinstance(stored, list):
+        return []
+
+    return [
+        str(item)
+        for item in stored
+        if isinstance(item, str) and item.strip()
+    ][:RECENT_LIMIT]
+
+
+def remember_recent(instruction: Path) -> None:
+    """Put this instruction at the top of the Recent list."""
+
+    path = str(Path(instruction).expanduser().resolve())
+
+    recent = [item for item in remembered_recent() if item != path]
+
+    save_settings(recent=[path, *recent][:RECENT_LIMIT])
 
 
 def instruction_job_dir(instruction: Path) -> Path:

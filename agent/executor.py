@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+from collections.abc import Callable
 from pathlib import Path
 
 from agent.dataflow import ResolutionError, resolve_arguments
@@ -22,8 +24,15 @@ class Executor:
         self,
         registry: ToolRegistry,
         job_directory: Path,
+        cancel: threading.Event | None = None,
+        progress: Callable[[int, int, str], None] | None = None,
     ) -> None:
         self.registry = registry
+
+        # Both are optional: the command line runs without them, and the
+        # window uses them for its Stop button and progress bar.
+        self.cancel = cancel
+        self.progress = progress
 
         self.job_directory = Path(job_directory)
 
@@ -53,7 +62,16 @@ class Executor:
 
         self._save(state)
 
-        for step in plan.steps:
+        total = len(plan.steps)
+
+        for index, step in enumerate(plan.steps):
+
+            # Stop between steps, never inside one: a half-written workbook
+            # is worse than one more step finishing.
+            if self.cancel is not None and self.cancel.is_set():
+                return self._stop(state, plan.steps[index:])
+
+            self._progress(index, total, step.description)
 
             missing_dependencies = [
                 dependency
@@ -135,6 +153,12 @@ class Executor:
                 f"{step.id} succeeded: {result.message}",
             )
 
+            self._progress(
+                index + 1,
+                total,
+                result.message or step.description,
+            )
+
             self._save(state)
 
         state.current_step = None
@@ -146,6 +170,37 @@ class Executor:
             "ORCHESTRATOR",
             f"Job completed: {job_id}",
         )
+
+        return state
+
+    def _progress(self, done: int, total: int, label: str) -> None:
+        if self.progress is None:
+            return
+
+        try:
+            self.progress(done, total, label)
+        except Exception:
+            # A broken progress callback must never fail the job.
+            pass
+
+    def _stop(
+        self,
+        state: JobState,
+        remaining: list[PlanStep],
+    ) -> JobState:
+        for step in remaining:
+            if step.status is not StepStatus.SUCCESS:
+                step.status = StepStatus.SKIPPED
+
+        state.current_step = None
+        state.status = StepStatus.SKIPPED
+
+        self.logger.log(
+            "EXECUTOR",
+            f"Stopped with {len(remaining)} step(s) left",
+        )
+
+        self._save(state)
 
         return state
 

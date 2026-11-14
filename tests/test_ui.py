@@ -5,6 +5,7 @@ import io
 import json
 import os
 import tempfile
+import threading
 import time
 import unittest
 from contextlib import redirect_stdout
@@ -396,6 +397,127 @@ class ExplicitInstructionTests(unittest.TestCase):
 
             with self.assertRaises(RuntimeError):
                 AgentRuntime(job, build_registry())
+
+
+THREE_STEPS = """\
+steps:
+  - id: first
+    tool: text
+    action: write
+    arguments:
+      output_path: output/a.txt
+      content: one
+  - id: second
+    tool: text
+    action: write
+    arguments:
+      output_path: output/b.txt
+      content: two
+  - id: third
+    tool: text
+    action: write
+    arguments:
+      output_path: output/c.txt
+      content: three
+"""
+
+
+class PlanAndStopTests(unittest.TestCase):
+    """Reviewing a plan, and stopping before it finishes."""
+
+    def setUp(self):
+        self._temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temp.cleanup)
+
+        self.job = Path(self._temp.name) / "job"
+        self.job.mkdir(parents=True)
+
+        patcher = mock.patch.dict(
+            os.environ,
+            {
+                "LLM_PROVIDER": "",
+                "LLM_BASE_URL": "",
+                "LLM_MODEL": "",
+                "LLM_API_KEY": "",
+            },
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        self.instruction = write_docx(
+            self.job / "instruction.docx",
+            THREE_STEPS.strip().splitlines(),
+        )
+
+    def test_planning_writes_nothing_and_lists_every_step(self):
+        with redirect_stdout(io.StringIO()):
+            runtime, kind, plan = desktop.plan_instruction(self.instruction)
+
+        self.assertEqual(kind, "plan")
+        self.assertIsNotNone(runtime)
+        self.assertEqual(
+            [(step.id, step.tool, step.action) for step in plan.steps],
+            [
+                ("first", "text", "write"),
+                ("second", "text", "write"),
+                ("third", "text", "write"),
+            ],
+        )
+        # Validation creates the empty output folder; planning writes nothing.
+        self.assertEqual(list((self.job / "output").iterdir()), [])
+        self.assertFalse((self.job / "report.json").exists())
+
+    def test_stopping_after_a_step_skips_the_rest(self):
+        with redirect_stdout(io.StringIO()):
+            runtime, kind, plan = desktop.plan_instruction(self.instruction)
+
+        cancel = threading.Event()
+        seen: list[tuple[int, int]] = []
+
+        def progress(done: int, total: int, label: str) -> None:
+            seen.append((done, total))
+
+            if done == 1:
+                cancel.set()
+
+        with redirect_stdout(io.StringIO()):
+            kind, state, outputs = desktop.execute_plan(
+                runtime,
+                plan,
+                progress=progress,
+                cancel=cancel,
+            )
+
+        self.assertEqual(kind, "done")
+        self.assertEqual(state.status.value, "skipped")
+        self.assertEqual(state.failed_steps, [])
+        self.assertEqual(
+            [step.status.value for step in plan.steps],
+            ["success", "skipped", "skipped"],
+        )
+        self.assertTrue((self.job / "output" / "a.txt").is_file())
+        self.assertFalse((self.job / "output" / "b.txt").exists())
+        self.assertFalse((self.job / "output" / "c.txt").exists())
+        self.assertEqual(outputs, [str((self.job / "output" / "a.txt").resolve())])
+        self.assertEqual(seen[0], (0, 3))
+        self.assertIn((1, 3), seen)
+
+    def test_progress_counts_every_step_to_the_end(self):
+        seen: list[tuple[int, int]] = []
+
+        with redirect_stdout(io.StringIO()):
+            runtime, kind, plan = desktop.plan_instruction(self.instruction)
+            kind, state, outputs = desktop.execute_plan(
+                runtime,
+                plan,
+                progress=lambda done, total, label: seen.append(
+                    (done, total)
+                ),
+            )
+
+        self.assertEqual(state.status.value, "success")
+        self.assertEqual(seen[0], (0, 3))
+        self.assertEqual(seen[-1], (3, 3))
 
 
 class SelfTestTests(unittest.TestCase):
@@ -798,6 +920,131 @@ class GuiWindowTests(unittest.TestCase):
             self.window.provider_by_label,
         )
         self.assertTrue(self.window.ai_status_var.get().strip())
+
+    def _wait_for_plan(self, timeout: float = 25.0):
+        """Wait for the preview window, then hand it back."""
+
+        worker = self.window.worker
+
+        if worker is not None:
+            worker.join(timeout)
+
+            if worker.is_alive():
+                return None
+
+        deadline = time.time() + 5.0
+
+        while time.time() < deadline:
+            self.root.update()
+
+            if self.window.plan_window is not None:
+                return self.window.plan_window
+
+            time.sleep(0.02)
+
+        return None
+
+    @classmethod
+    def _button(cls, window, label: str):
+        for child in window.winfo_children():
+            try:
+                if (
+                    child.winfo_class() in ("Button", "TButton")
+                    and child.cget("text") == label
+                ):
+                    return child
+            except Exception:
+                pass
+
+            found = cls._button(child, label)
+
+            if found is not None:
+                return found
+
+        return None
+
+    def test_the_plan_is_shown_before_anything_is_written(self):
+        with tempfile.TemporaryDirectory() as directory:
+            job = Path(directory) / "job"
+            job.mkdir(parents=True)
+
+            instruction = write_docx(
+                job / "instruction.docx",
+                SPEC.strip().splitlines(),
+            )
+
+            self.assertTrue(self.window.review_var.get())
+
+            self.window.use_instruction(instruction)
+            self.window.run_job()
+
+            dialog = self._wait_for_plan()
+
+            self.assertIsNotNone(dialog, "the plan preview never opened")
+            self.assertFalse((job / "output" / "quick.txt").exists())
+
+            start = self._button(
+                dialog, ui.text(self.window.language, "plan_start")
+            )
+
+            self.assertIsNotNone(start, "the preview has no Run button")
+
+            start.invoke()
+
+            self.assertTrue(self._wait_for_run())
+            self.assertTrue((job / "output" / "quick.txt").is_file())
+
+    def test_stopping_while_the_plan_is_built_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            job = Path(directory) / "job"
+            job.mkdir(parents=True)
+
+            instruction = write_docx(
+                job / "instruction.docx",
+                THREE_STEPS.strip().splitlines(),
+            )
+
+            self.window.use_instruction(instruction)
+            self.window.run_job()
+
+            dialog = self._wait_for_plan()
+
+            self.assertIsNotNone(dialog, "the plan preview never opened")
+
+            self.window.stop_job()
+
+            start = self._button(
+                dialog, ui.text(self.window.language, "plan_start")
+            )
+
+            self.assertIsNotNone(start)
+
+            start.invoke()
+
+            self.assertFalse(self.window.running)
+            self.assertEqual(
+                self.window.status_var.get(),
+                ui.text(self.window.language, "stopped", count=0),
+            )
+            self.assertFalse((job / "output" / "a.txt").exists())
+
+    def test_review_off_runs_straight_away(self):
+        with tempfile.TemporaryDirectory() as directory:
+            job = Path(directory) / "job"
+            job.mkdir(parents=True)
+
+            instruction = write_docx(
+                job / "instruction.docx",
+                SPEC.strip().splitlines(),
+            )
+
+            self.window.review_var.set(False)
+            self.window.use_instruction(instruction)
+            self.window.run_job()
+
+            self.assertTrue(self._wait_for_run())
+            self.assertIsNone(self.window.plan_window)
+            self.assertTrue((job / "output" / "quick.txt").is_file())
 
     def _wait_for_run(self, timeout: float = 25.0) -> bool:
         """Let the worker finish, then pump the window until it reports back.

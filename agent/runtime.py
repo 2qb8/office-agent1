@@ -446,12 +446,14 @@ class AgentRuntime:
     # Execution
     # ------------------------------------------------------------------
 
-    def execute(self, plan: JobPlan) -> JobState:
+    def execute(self, plan: JobPlan, progress=None, cancel=None) -> JobState:
         self.logger.log("EXECUTOR", "Starting execution")
 
         state = Executor(
             self.registry,
             self.job_path,
+            cancel=cancel,
+            progress=progress,
         ).execute(plan, self.job_id)
 
         self.logger.log(
@@ -461,20 +463,36 @@ class AgentRuntime:
 
         return state
 
-    def run(self, use_ai: bool | None = None) -> JobState:
+    def run(
+        self,
+        use_ai: bool | None = None,
+        progress=None,
+        cancel=None,
+    ) -> JobState:
         llm = None
 
         if use_ai is True:
             llm = create_llm()
 
-        return self._run_with(llm, use_ai=use_ai)
+        return self._run_with(
+            llm,
+            use_ai=use_ai,
+            progress=progress,
+            cancel=cancel,
+        )
 
-    def _run_with(
-        self,
-        llm,
-        use_ai: bool | None = None,
-    ) -> JobState:
+    def plan(self, use_ai: bool | None = None) -> JobPlan:
+        """Read the instruction and build a validated plan, running nothing.
 
+        The window uses this to show the user what is about to happen before
+        a single file is written.
+        """
+
+        llm = create_llm() if use_ai is True else None
+
+        return self._plan_with(llm, use_ai=use_ai)
+
+    def _plan_with(self, llm, use_ai: bool | None = None) -> JobPlan:
         self.logger.log(
             "ORCHESTRATOR",
             f"Job started: {self.job_id}",
@@ -497,7 +515,17 @@ class AgentRuntime:
 
         self.logger.log("VALIDATOR", "Plan validation passed")
 
-        state = self.execute(plan)
+        return plan
+
+    def execute_plan(
+        self,
+        plan: JobPlan,
+        progress=None,
+        cancel=None,
+    ) -> JobState:
+        """Run a plan already built by ``plan()`` and write the report."""
+
+        state = self.execute(plan, progress=progress, cancel=cancel)
 
         for path in self.output_files(state):
             self.logger.log("OUTPUT", path)
@@ -512,6 +540,17 @@ class AgentRuntime:
         )
 
         return state
+
+    def _run_with(
+        self,
+        llm,
+        use_ai: bool | None = None,
+        progress=None,
+        cancel=None,
+    ) -> JobState:
+        plan = self._plan_with(llm, use_ai=use_ai)
+
+        return self.execute_plan(plan, progress=progress, cancel=cancel)
 
     # ------------------------------------------------------------------
     # Reporting

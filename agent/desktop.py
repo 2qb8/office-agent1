@@ -38,6 +38,59 @@ def test_ai_connection(
         )
 
 
+def build_runtime(instruction: Path) -> AgentRuntime:
+    """The runtime for the folder holding this instruction."""
+
+    return AgentRuntime(
+        instruction_job_dir(instruction),
+        build_registry(),
+        instruction_path=instruction,
+    )
+
+
+def plan_instruction(
+    instruction: Path,
+) -> tuple[AgentRuntime | None, str, Any]:
+    """Build the plan without running it, for the window's preview.
+
+    Returns ``(runtime, kind, payload)``; kind is ``"plan"`` and the payload
+    is the JobPlan, or ``"nospec"`` / ``"error"`` exactly as
+    :func:`run_instruction` reports them.
+    """
+
+    try:
+        runtime = build_runtime(instruction)
+
+        return runtime, "plan", runtime.plan()
+
+    except SpecError:
+        return None, "nospec", None
+
+    except Exception as exc:  # surfaced in the window, not a crash
+        return None, "error", exc
+
+
+def execute_plan(
+    runtime: AgentRuntime,
+    plan,
+    progress=None,
+    cancel=None,
+) -> tuple[str, Any, list[str]]:
+    """Run a plan built by :func:`plan_instruction`."""
+
+    try:
+        state = runtime.execute_plan(
+            plan,
+            progress=progress,
+            cancel=cancel,
+        )
+
+        return "done", state, runtime.output_files(state)
+
+    except Exception as exc:  # surfaced in the window, not a crash
+        return "error", exc, []
+
+
 def run_instruction(
     instruction: Path,
 ) -> tuple[str, Any, list[str]]:
@@ -53,22 +106,12 @@ def run_instruction(
     runtime plans with the configured model, if any.
     """
 
-    try:
-        runtime = AgentRuntime(
-            instruction_job_dir(instruction),
-            build_registry(),
-            instruction_path=instruction,
-        )
+    runtime, kind, payload = plan_instruction(instruction)
 
-        state = runtime.run()
+    if runtime is None or kind != "plan":
+        return kind, payload, []
 
-        return "done", state, runtime.output_files(state)
-
-    except SpecError:
-        return "nospec", None, []
-
-    except Exception as exc:  # surfaced in the window, not a crash
-        return "error", exc, []
+    return execute_plan(runtime, payload)
 
 
 def self_test(instruction: Path) -> int:

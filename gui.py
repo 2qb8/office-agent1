@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import queue
+import shutil
 import subprocess
 import sys
 import threading
@@ -12,17 +13,28 @@ from pathlib import Path
 from tkinter import filedialog, font as tkfont, ttk
 
 from agent import __version__, ai_config
-from agent.desktop import run_instruction, self_test, test_ai_connection
+from agent.desktop import (
+    execute_plan,
+    plan_instruction,
+    run_instruction,
+    self_test,
+    test_ai_connection,
+)
 from agent.llm_factory import PROVIDERS
 from agent.ui import (
     APP_TITLE,
     LANGUAGES,
     default_output_dir,
     describe_state,
+    instruction_job_dir,
     is_instruction_file,
+    remember_recent,
     remembered_ai,
     remembered_language,
+    remembered_recent,
+    remembered_review,
     save_ai,
+    save_review,
     save_settings,
     text,
 )
@@ -64,14 +76,22 @@ def _enable_dpi_awareness() -> None:
         pass
 
 
+def _bundle_root() -> Path:
+    base = getattr(sys, "_MEIPASS", None)
+
+    return Path(base) if base else Path(__file__).resolve().parent
+
+
 def asset_path(name: str) -> Path:
     """Where bundled assets live, both from source and inside the exe."""
 
-    base = getattr(sys, "_MEIPASS", None)
+    return _bundle_root() / "assets" / name
 
-    root = Path(base) if base else Path(__file__).resolve().parent
 
-    return root / "assets" / name
+def example_dir() -> Path:
+    """The example job bundled with the app."""
+
+    return _bundle_root() / "examples" / "sales-pack"
 
 
 class OfficeAgentWindow:
@@ -80,9 +100,18 @@ class OfficeAgentWindow:
         self.language = remembered_language()
         self.messages: queue.Queue = queue.Queue()
         self.running = False
+        self.failed = False
         self.outputs: list[str] = []
         self.poll_id: str | None = None
         self.testing = False
+
+        # Set by the Stop button; the executor checks it between steps.
+        self.cancel: threading.Event | None = None
+
+        # The plan preview window, while it is open.
+        self.plan_window: tk.Toplevel | None = None
+
+        self.recent_paths: list[str] = remembered_recent()
 
         # The thread doing work right now. Kept so it can be joined before
         # the window (and its Tk objects) goes away: a worker that outlives
@@ -97,6 +126,7 @@ class OfficeAgentWindow:
         self.endpoint_var = tk.StringVar()
         self.api_key_var = tk.StringVar()
         self.ai_status_var = tk.StringVar()
+        self.review_var = tk.BooleanVar(value=remembered_review())
 
         self.code_by_label = {
             label: code for code, label in LANGUAGES.items()
@@ -281,6 +311,25 @@ class OfficeAgentWindow:
         )
         self.language_combo.bind("<<ComboboxSelected>>", self.on_language)
 
+        self.recent_button = ttk.Menubutton(
+            self.document_card,
+            width=12,
+        )
+        self.recent_menu = tk.Menu(self.recent_button, tearoff=False)
+        self.recent_menu.configure(postcommand=self._fill_recent)
+        self.recent_button.configure(menu=self.recent_menu)
+        self.recent_button.grid(
+            row=0, column=3, sticky="ew", padx=(8, 0), pady=(4, 0)
+        )
+
+        self.example_button = ttk.Button(
+            self.document_card,
+            command=self.use_example,
+        )
+        self.example_button.grid(
+            row=1, column=3, sticky="e", padx=(8, 0)
+        )
+
     def _build_ai_card(self, parent: ttk.Frame) -> None:
         self.ai_card = ttk.LabelFrame(
             parent,
@@ -464,16 +513,46 @@ class OfficeAgentWindow:
         )
         self.open_button.grid(row=0, column=1, sticky="w", padx=(12, 0))
 
+        self.stop_button = ttk.Button(
+            footer,
+            command=self.stop_job,
+            state="disabled",
+        )
+        self.stop_button.grid(row=0, column=2, sticky="w", padx=(8, 0))
+
+        # Determinate: one step of the plan is one step of the bar.
         self.progress = ttk.Progressbar(
             footer,
-            mode="indeterminate",
+            mode="determinate",
+            maximum=100,
+            value=0,
             length=170,
         )
         self.progress.grid(row=0, column=3, sticky="e")
 
-        # Only shown while a job runs; an idle indeterminate bar is just a
-        # stray coloured block.
+        # Only shown while a job runs; an idle bar is just a stray block.
         self.progress.grid_remove()
+
+        self.review_check = ttk.Checkbutton(
+            footer,
+            variable=self.review_var,
+            command=self._on_review_toggle,
+        )
+        self.review_check.grid(
+            row=1, column=0, columnspan=2, sticky="w", pady=(10, 0)
+        )
+
+        self.copy_button = ttk.Button(
+            footer,
+            command=self.copy_details,
+            state="disabled",
+        )
+        self.copy_button.grid(row=1, column=3, sticky="e", pady=(10, 0))
+
+        self.log_button = ttk.Button(footer, command=self.open_run_log)
+        self.log_button.grid(
+            row=1, column=4, sticky="e", padx=(8, 0), pady=(10, 0)
+        )
 
     def _mono_family(self) -> str:
         available = set(tkfont.families(self.root))
@@ -554,6 +633,14 @@ class OfficeAgentWindow:
         self.open_button.configure(
             text=text(self.language, "open_output")
         )
+        self.stop_button.configure(text=text(self.language, "stop"))
+        self.review_check.configure(
+            text=text(self.language, "review_plan")
+        )
+        self.copy_button.configure(text=text(self.language, "copy_details"))
+        self.log_button.configure(text=text(self.language, "open_log"))
+        self.recent_button.configure(text=text(self.language, "recent"))
+        self.example_button.configure(text=text(self.language, "example"))
         self.run_button.configure(
             text=text(
                 self.language,
@@ -830,8 +917,18 @@ class OfficeAgentWindow:
         )
         self._append("", None)
 
+        self.cancel = threading.Event()
+        self.failed = False
+
+        try:
+            remember_recent(instruction)
+        except Exception:
+            pass
+
+        target = self._work_plan if self.review_var.get() else self._work
+
         self.worker = threading.Thread(
-            target=self._work,
+            target=target,
             args=(instruction,),
             daemon=True,
         )
@@ -841,6 +938,54 @@ class OfficeAgentWindow:
         # A spec in the instruction always wins; AI is used only for
         # instructions that have none, and only when configured.
         self.messages.put(run_instruction(instruction))
+
+    def _work_plan(self, instruction: Path) -> None:
+        """Plan only, so the window can show the steps first."""
+
+        try:
+            runtime, kind, payload = plan_instruction(instruction)
+        except Exception as exc:  # never leave the window waiting
+            self.messages.put(("error", exc, None))
+            return
+
+        if kind == "plan" and runtime is not None:
+            self.messages.put(("plan", (runtime, payload), None))
+            return
+
+        self.messages.put((kind, payload, None))
+
+    def _work_execute(self, runtime, plan) -> None:
+        self.messages.put(
+            execute_plan(
+                runtime,
+                plan,
+                progress=self._progress,
+                cancel=self.cancel,
+            )
+        )
+
+    def _progress(self, done: int, total: int, label: str) -> None:
+        """Called on the worker thread; the window draws it when polled."""
+
+        self.messages.put(("progress", (done, total), label))
+
+    def stop_job(self) -> None:
+        """Stop before the next step; the current one is allowed to finish."""
+
+        if not self.running:
+            return
+
+        if self.cancel is not None:
+            self.cancel.set()
+
+        self.stop_button.configure(state="disabled")
+        self._set_status(text(self.language, "stopping"), MUTED)
+
+    def _on_review_toggle(self) -> None:
+        try:
+            save_review(bool(self.review_var.get()))
+        except Exception:
+            pass
 
     def _poll(self) -> None:
         try:
@@ -871,6 +1016,7 @@ class OfficeAgentWindow:
                     else failed_id
                 )
 
+                self.failed = True
                 self._set_running(False)
                 self._set_status(
                     text(self.language, "failed", error=reason),
@@ -880,15 +1026,42 @@ class OfficeAgentWindow:
 
             self.outputs = list(extra)
 
-            for path in self.outputs:
-                self._append("", None)
-                self._append(path, "path")
+            self._show_outputs()
+
+            if state.status.value == "skipped":
+                self._set_running(False)
+                self._set_status(
+                    text(
+                        self.language,
+                        "stopped",
+                        count=len(self.outputs),
+                    ),
+                    MUTED,
+                )
+                return
 
             self._set_running(False)
             self._set_status(
                 text(self.language, "done", count=len(self.outputs)),
                 SUCCESS,
             )
+            return
+
+        if kind == "plan":
+            runtime, plan = payload
+
+            self._show_plan(runtime, plan)
+            return
+
+        if kind == "progress":
+            done, total = payload
+
+            if total:
+                self.progress.configure(value=100.0 * done / total)
+
+            if self.running and extra:
+                self._set_status(str(extra), MUTED)
+
             return
 
         if kind == "ai_ok":
@@ -910,9 +1083,16 @@ class OfficeAgentWindow:
             return
 
         self._set_running(False)
+        self.failed = True
 
         if kind == "nospec":
             message = text(self.language, "no_spec")
+            self._append(message, "fail")
+            self._set_status(message, FAILURE)
+            return
+
+        if kind == "busy":
+            message = text(self.language, "busy")
             self._append(message, "fail")
             self._set_status(message, FAILURE)
             return
@@ -954,11 +1134,24 @@ class OfficeAgentWindow:
             )
         )
 
+        self.stop_button.configure(
+            state="normal" if running else "disabled"
+        )
+        self.review_check.configure(
+            state="disabled" if running else "normal"
+        )
+        self.copy_button.configure(
+            state=(
+                "normal"
+                if self.failed and not running
+                else "disabled"
+            )
+        )
+
         if running:
+            self.progress.configure(value=0)
             self.progress.grid()
-            self.progress.start(14)
         else:
-            self.progress.stop()
             self.progress.grid_remove()
 
     # ------------------------------------------------------------------
@@ -976,7 +1169,20 @@ class OfficeAgentWindow:
 
         try:
             target.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self._set_status(
+                text(self.language, "cannot_open", error=exc), FAILURE
+            )
+            return
 
+        self._open_path(str(target))
+
+    def _open_path(self, path: str) -> None:
+        """Open a file or folder with whatever the system uses for it."""
+
+        target = Path(path).expanduser()
+
+        try:
             if sys.platform.startswith("win"):
                 os.startfile(str(target))  # type: ignore[attr-defined]
             elif sys.platform == "darwin":
@@ -987,6 +1193,271 @@ class OfficeAgentWindow:
             self._set_status(
                 text(self.language, "cannot_open", error=exc), FAILURE
             )
+
+    def _show_outputs(self) -> None:
+        """One clickable line per created file."""
+
+        for index, path in enumerate(self.outputs):
+            tag = f"out{index}"
+
+            self._append("", None)
+
+            self.log.tag_configure(tag, underline=True, foreground=ACCENT)
+            self._append(path, tag)
+
+            self.log.tag_bind(
+                tag,
+                "<Button-1>",
+                lambda event, target=path: self._open_path(target),
+            )
+            self.log.tag_bind(
+                tag,
+                "<Enter>",
+                lambda event: self.log.configure(cursor="hand2"),
+            )
+            self.log.tag_bind(
+                tag,
+                "<Leave>",
+                lambda event: self.log.configure(cursor=""),
+            )
+
+    def _log_path(self) -> Path:
+        raw = self.instruction_var.get().strip()
+
+        if not raw:
+            return Path("run.log")
+
+        return instruction_job_dir(Path(raw).expanduser()) / "run.log"
+
+    def open_run_log(self) -> None:
+        target = self._log_path()
+
+        if not target.is_file():
+            self._set_status(text(self.language, "no_log"), FAILURE)
+            return
+
+        self._open_path(str(target))
+
+    def copy_details(self) -> None:
+        """Everything needed to describe a failure, one click away."""
+
+        lines = [
+            f"{APP_TITLE} {__version__}",
+            f"instruction: {self.instruction_var.get().strip()}",
+            f"output: {self.output_var.get().strip()}",
+            f"log: {self._log_path()}",
+            f"status: {self.status_var.get()}",
+        ]
+
+        lines.extend(self.outputs)
+
+        try:
+            self.root.clipboard_clear()
+            self.root.clipboard_append("\n".join(lines))
+        except tk.TclError:
+            pass
+
+        self._set_status(text(self.language, "copied"), MUTED)
+
+    def use_example(self) -> None:
+        """Copy the bundled example into Documents and fill the window."""
+
+        source = example_dir()
+
+        if not source.is_dir():
+            self._set_status(
+                text(self.language, "example_failed", error=source),
+                FAILURE,
+            )
+            return
+
+        destination = Path.home() / "Documents" / "Office Agent example"
+
+        try:
+            if destination.exists():
+                shutil.rmtree(destination)
+
+            shutil.copytree(source, destination)
+        except OSError as exc:
+            self._set_status(
+                text(self.language, "example_failed", error=exc),
+                FAILURE,
+            )
+            return
+
+        self.use_instruction(destination / "instruction.docx")
+
+        self._set_status(
+            text(self.language, "example_copied", path=destination),
+            SUCCESS,
+        )
+
+    def _fill_recent(self) -> None:
+        self.recent_menu.delete(0, "end")
+
+        self.recent_paths = [
+            path for path in remembered_recent() if Path(path).is_file()
+        ]
+
+        if not self.recent_paths:
+            self.recent_menu.add_command(
+                label=text(self.language, "recent_empty"),
+                state="disabled",
+            )
+            return
+
+        for path in self.recent_paths:
+            self.recent_menu.add_command(
+                label=f"{Path(path).name} — {Path(path).parent}",
+                command=lambda chosen=path: self.use_instruction(
+                    Path(chosen)
+                ),
+            )
+
+    # ------------------------------------------------------------------
+    # Plan preview
+    # ------------------------------------------------------------------
+
+    def _show_plan(self, runtime, plan) -> None:
+        """Show the steps before anything is written."""
+
+        if self.plan_window is not None:
+            self._dismiss_plan(self.plan_window)
+
+        window = tk.Toplevel(self.root)
+        self.plan_window = window
+
+        window.title(text(self.language, "plan_title"))
+        window.configure(bg=WINDOW_BG)
+        window.transient(self.root)
+        window.resizable(False, False)
+
+        frame = tk.Frame(window, bg=WINDOW_BG, padx=18, pady=16)
+        frame.pack(fill="both", expand=True)
+
+        tk.Label(
+            frame,
+            text=text(self.language, "plan_goal", goal=plan.goal or "—"),
+            bg=WINDOW_BG,
+            fg="#0f172a",
+            font=(self.family, 11, "bold"),
+            anchor="w",
+            justify="left",
+            wraplength=520,
+        ).pack(fill="x")
+
+        tk.Label(
+            frame,
+            text=text(self.language, "plan_count", count=len(plan.steps)),
+            bg=WINDOW_BG,
+            fg=MUTED,
+            font=(self.family, 10),
+            anchor="w",
+        ).pack(fill="x", pady=(2, 10))
+
+        body = tk.Text(
+            frame,
+            width=62,
+            height=max(4, min(16, len(plan.steps) * 2)),
+            wrap="word",
+            relief="flat",
+            bg="#ffffff",
+            fg="#0f172a",
+            font=(self.family, 10),
+            padx=10,
+            pady=8,
+            highlightthickness=0,
+        )
+
+        for index, step in enumerate(plan.steps, start=1):
+            body.insert("end", f"{index}. {step.tool}.{step.action}\n")
+            body.insert("end", f"    {step.description}\n\n")
+
+        body.configure(state="disabled")
+        body.pack(fill="both", expand=True)
+
+        buttons = tk.Frame(frame, bg=WINDOW_BG)
+        buttons.pack(fill="x", pady=(14, 0))
+
+        tk.Button(
+            buttons,
+            text=text(self.language, "plan_start"),
+            command=lambda: self._start_plan(window, runtime, plan),
+            bg=ACCENT,
+            fg="#ffffff",
+            activebackground=ACCENT_HOVER,
+            activeforeground="#ffffff",
+            relief="flat",
+            borderwidth=0,
+            highlightthickness=0,
+            padx=20,
+            pady=7,
+            cursor="hand2",
+            font=(self.family, 10, "bold"),
+        ).pack(side="left")
+
+        ttk.Button(
+            buttons,
+            text=text(self.language, "plan_cancel"),
+            command=lambda: self._dismiss_plan(window),
+        ).pack(side="right")
+
+        window.protocol(
+            "WM_DELETE_WINDOW", lambda: self._dismiss_plan(window)
+        )
+
+        window.update_idletasks()
+
+        try:
+            x = self.root.winfo_rootx() + max(
+                0, (self.root.winfo_width() - window.winfo_width()) // 2
+            )
+            y = self.root.winfo_rooty() + 90
+
+            window.geometry(f"+{x}+{y}")
+            window.grab_set()
+        except tk.TclError:
+            pass
+
+    def _start_plan(self, window, runtime, plan) -> None:
+        self.plan_window = None
+
+        try:
+            window.grab_release()
+            window.destroy()
+        except tk.TclError:
+            pass
+
+        if self.cancel is not None and self.cancel.is_set():
+            # Stop was pressed while the plan was being built: run nothing.
+            self._set_running(False)
+            self._set_status(
+                text(self.language, "stopped", count=0), MUTED
+            )
+            return
+
+        self.cancel = threading.Event()
+
+        self.worker = threading.Thread(
+            target=self._work_execute,
+            args=(runtime, plan),
+            daemon=True,
+        )
+        self.worker.start()
+
+    def _dismiss_plan(self, window) -> None:
+        """Cancelling the preview ends the run: nothing was written."""
+
+        self.plan_window = None
+
+        try:
+            window.grab_release()
+            window.destroy()
+        except tk.TclError:
+            pass
+
+        self._set_running(False)
+        self._set_status(text(self.language, "ready"), MUTED)
 
     def close(self) -> None:
         """Stop the worker and polling before the widgets disappear."""
@@ -1012,6 +1483,15 @@ class OfficeAgentWindow:
                 pass
 
             self.poll_id = None
+
+        if self.plan_window is not None:
+            try:
+                self.plan_window.grab_release()
+                self.plan_window.destroy()
+            except tk.TclError:
+                pass
+
+            self.plan_window = None
 
         self._release_tk_objects()
 
@@ -1039,6 +1519,7 @@ class OfficeAgentWindow:
             "endpoint_var",
             "api_key_var",
             "ai_status_var",
+            "review_var",
         ):
             setattr(self, name, None)
 
