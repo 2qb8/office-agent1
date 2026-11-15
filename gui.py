@@ -15,7 +15,9 @@ from tkinter import filedialog, font as tkfont, ttk
 from agent import __version__, ai_config
 from agent.desktop import (
     execute_plan,
+    plan_from_reply,
     plan_instruction,
+    plan_request,
     run_instruction,
     self_test,
     test_ai_connection,
@@ -111,6 +113,15 @@ class OfficeAgentWindow:
         # The plan preview window, while it is open.
         self.plan_window: tk.Toplevel | None = None
 
+        # The chatbot planning window and what it is showing. chat_job
+        # numbers each validation, so a reply that arrives after the window
+        # was closed or reopened cannot open a stale preview.
+        self.chat_window: tk.Toplevel | None = None
+        self.chat_request_text = ""
+        self.chat_reply: tk.Text | None = None
+        self.chat_use_button: tk.Button | None = None
+        self.chat_job = 0
+
         self.recent_paths: list[str] = remembered_recent()
 
         # The thread doing work right now. Kept so it can be joined before
@@ -126,6 +137,7 @@ class OfficeAgentWindow:
         self.endpoint_var = tk.StringVar()
         self.api_key_var = tk.StringVar()
         self.ai_status_var = tk.StringVar()
+        self.chat_error_var = tk.StringVar()
         self.review_var = tk.BooleanVar(value=remembered_review())
 
         self.code_by_label = {
@@ -538,6 +550,13 @@ class OfficeAgentWindow:
         self.log_button = ttk.Button(footer, command=self.open_run_log)
         self.log_button.grid(row=0, column=4, sticky="e", padx=(8, 0))
 
+        # No key needed: plan in a web chat and paste the reply back.
+        self.chat_button = ttk.Button(
+            footer,
+            command=self.show_chat_plan,
+        )
+        self.chat_button.grid(row=0, column=5, sticky="e", padx=(8, 0))
+
         # Determinate: one step of the plan is one step of the bar.
         self.progress = ttk.Progressbar(
             footer,
@@ -669,6 +688,7 @@ class OfficeAgentWindow:
         )
         self.copy_button.configure(text=text(self.language, "copy_details"))
         self.log_button.configure(text=text(self.language, "open_log"))
+        self.chat_button.configure(text=text(self.language, "chat"))
         self.recent_button.configure(text=text(self.language, "recent"))
         self.example_button.configure(text=text(self.language, "example"))
         self.run_button.configure(
@@ -965,8 +985,8 @@ class OfficeAgentWindow:
         self.worker.start()
 
     def _work(self, instruction: Path) -> None:
-        # A spec in the instruction always wins; AI is used only for
-        # instructions that have none, and only when configured.
+        # A saved plan runs first, then a job spec written into the brief,
+        # then the model when one is configured.
         self.messages.put(run_instruction(instruction))
 
     def _work_plan(self, instruction: Path) -> None:
@@ -1081,6 +1101,43 @@ class OfficeAgentWindow:
             runtime, plan = payload
 
             self._show_plan(runtime, plan)
+            return
+
+        if kind == "chat_plan":
+            runtime, plan, token = payload
+
+            if token != self.chat_job:
+                return  # the dialog was closed or reopened meanwhile
+
+            # The plan is accepted, so the dialog has done its job.
+            if self.chat_window is not None:
+                self._close_chat_dialog(self.chat_window)
+
+            self._set_running(False)
+            self._append(text(self.language, "chat_ready"), "ok")
+            self._show_plan(runtime, plan)
+            return
+
+        if kind == "chat_error":
+            reason, token = payload
+
+            if token != self.chat_job:
+                return
+
+            self._set_running(False)
+            self.failed = True
+
+            message = text(
+                self.language, "chat_invalid", error=reason
+            )
+
+            self._append(message, "fail")
+            self._set_status(message, FAILURE)
+
+            # Keep the dialog and the pasted text: fix and try again.
+            if self.chat_window is not None:
+                self._set_chat_busy(False)
+                self._set_chat_error(message)
             return
 
         if kind == "progress":
@@ -1345,6 +1402,343 @@ class OfficeAgentWindow:
             )
 
     # ------------------------------------------------------------------
+    # Planning in a chatbot
+    # ------------------------------------------------------------------
+
+    def _chosen_instruction(self) -> Path | None:
+        """The instruction in the box, or a status line saying why not."""
+
+        raw = self.instruction_var.get().strip()
+
+        if not raw:
+            self._set_status(
+                text(self.language, "no_instruction"), FAILURE
+            )
+            return None
+
+        instruction = Path(raw).expanduser()
+
+        if not instruction.is_file():
+            self._set_status(
+                text(self.language, "missing_instruction"), FAILURE
+            )
+            return None
+
+        if not is_instruction_file(instruction):
+            self._set_status(
+                text(self.language, "unsupported_instruction"), FAILURE
+            )
+            return None
+
+        return instruction
+
+    def show_chat_plan(self) -> None:
+        """Build the request for a web chat and open the paste window."""
+
+        if self.running:
+            return
+
+        instruction = self._chosen_instruction()
+
+        if instruction is None:
+            return
+
+        try:
+            path, request = plan_request(instruction)
+        except Exception as exc:  # shown in the window, never a crash
+            self._set_status(
+                text(self.language, "chat_failed", error=exc), FAILURE
+            )
+            return
+
+        self._open_chat_dialog(instruction, path, request)
+
+    def _open_chat_dialog(
+        self,
+        instruction: Path,
+        path: Path,
+        request: str,
+    ) -> None:
+        if self.chat_window is not None:
+            self.chat_job += 1  # a check for the old dialog is now stale
+            self._close_chat_dialog(self.chat_window)
+
+        self.chat_request_text = request
+        self.chat_reply = None
+        self.chat_use_button = None
+        self.chat_error_var.set("")
+
+        window = tk.Toplevel(self.root)
+        self.chat_window = window
+
+        window.title(text(self.language, "chat_title"))
+        window.configure(bg=WINDOW_BG)
+        window.transient(self.root)
+
+        frame = tk.Frame(window, bg=WINDOW_BG, padx=18, pady=16)
+        frame.pack(fill="both", expand=True)
+
+        tk.Label(
+            frame,
+            text=text(self.language, "chat_title"),
+            bg=WINDOW_BG,
+            fg="#0f172a",
+            font=(self.family, 12, "bold"),
+            anchor="w",
+        ).pack(fill="x")
+
+        tk.Label(
+            frame,
+            text=text(self.language, "chat_intro"),
+            bg=WINDOW_BG,
+            fg=MUTED,
+            font=(self.family, 9),
+            anchor="w",
+            justify="left",
+            wraplength=600,
+        ).pack(fill="x", pady=(4, 10))
+
+        tk.Label(
+            frame,
+            text=text(self.language, "chat_request"),
+            bg=WINDOW_BG,
+            fg="#334155",
+            font=(self.family, 9, "bold"),
+            anchor="w",
+        ).pack(fill="x")
+
+        request_box = tk.Text(
+            frame,
+            width=74,
+            height=12,
+            wrap="word",
+            relief="flat",
+            bg="#ffffff",
+            fg="#0f172a",
+            font=(self._mono_family(), 9),
+            padx=8,
+            pady=6,
+            highlightthickness=0,
+        )
+        request_box.insert("1.0", request)
+        request_box.configure(state="disabled")
+        request_box.pack(fill="both", expand=True, pady=(2, 6))
+
+        actions = tk.Frame(frame, bg=WINDOW_BG)
+        actions.pack(fill="x")
+
+        ttk.Button(
+            actions,
+            text=text(self.language, "chat_copy"),
+            command=self._copy_chat_request,
+        ).pack(side="left")
+
+        tk.Label(
+            actions,
+            text=text(self.language, "chat_saved", path=path.name),
+            bg=WINDOW_BG,
+            fg=MUTED,
+            font=(self.family, 9),
+        ).pack(side="left", padx=(10, 0))
+
+        tk.Label(
+            frame,
+            text=text(self.language, "chat_reply"),
+            bg=WINDOW_BG,
+            fg="#334155",
+            font=(self.family, 9, "bold"),
+            anchor="w",
+        ).pack(fill="x", pady=(12, 0))
+
+        reply = tk.Text(
+            frame,
+            width=74,
+            height=8,
+            wrap="word",
+            relief="flat",
+            bg="#ffffff",
+            fg="#0f172a",
+            font=(self._mono_family(), 9),
+            padx=8,
+            pady=6,
+            highlightthickness=0,
+        )
+        reply.pack(fill="both", expand=True, pady=(2, 6))
+        self.chat_reply = reply
+
+        # Why the reply was refused, right where it was pasted.
+        tk.Label(
+            frame,
+            textvariable=self.chat_error_var,
+            bg=WINDOW_BG,
+            fg=FAILURE,
+            font=(self.family, 9),
+            anchor="w",
+            justify="left",
+            wraplength=600,
+        ).pack(fill="x", pady=(0, 8))
+
+        buttons = tk.Frame(frame, bg=WINDOW_BG)
+        buttons.pack(fill="x")
+
+        self.chat_use_button = tk.Button(
+            buttons,
+            text=text(self.language, "chat_use"),
+            command=lambda: self._use_chat_plan(instruction),
+            bg=ACCENT,
+            fg="#ffffff",
+            activebackground=ACCENT_HOVER,
+            activeforeground="#ffffff",
+            relief="flat",
+            borderwidth=0,
+            highlightthickness=0,
+            padx=20,
+            pady=7,
+            cursor="hand2",
+            font=(self.family, 10, "bold"),
+        )
+        self.chat_use_button.pack(side="left")
+
+        ttk.Button(
+            buttons,
+            text=text(self.language, "plan_cancel"),
+            command=lambda: self._cancel_chat_plan(window),
+        ).pack(side="right")
+
+        window.protocol(
+            "WM_DELETE_WINDOW",
+            lambda: self._cancel_chat_plan(window),
+        )
+
+        window.update_idletasks()
+
+        try:
+            x = self.root.winfo_rootx() + max(
+                0,
+                (self.root.winfo_width() - window.winfo_width()) // 2,
+            )
+            y = self.root.winfo_rooty() + 50
+
+            window.geometry(f"+{x}+{y}")
+            window.grab_set()
+        except tk.TclError:
+            pass
+
+    def _copy_chat_request(self) -> None:
+        try:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(self.chat_request_text)
+            self.root.update_idletasks()
+        except tk.TclError:
+            return
+
+        self._set_status(text(self.language, "chat_copied"), SUCCESS)
+
+    def _set_chat_error(self, message: str) -> None:
+        """The reason a pasted plan was refused, shown in the dialog."""
+
+        try:
+            self.chat_error_var.set(message)
+        except (AttributeError, tk.TclError):
+            pass
+
+    def _set_chat_busy(self, busy: bool) -> None:
+        """Freeze the reply box while its plan is being checked."""
+
+        state = "disabled" if busy else "normal"
+
+        try:
+            if self.chat_use_button is not None:
+                self.chat_use_button.configure(state=state)
+
+            if self.chat_reply is not None:
+                self.chat_reply.configure(state=state)
+
+                if not busy:
+                    self.chat_reply.focus_set()
+        except tk.TclError:
+            pass
+
+    def _close_chat_dialog(self, window) -> None:
+        self.chat_window = None
+        self.chat_reply = None
+        self.chat_use_button = None
+
+        try:
+            window.grab_release()
+            window.destroy()
+        except tk.TclError:
+            pass
+
+    def _cancel_chat_plan(self, window) -> None:
+        """Closing the dialog also drops whatever it was checking."""
+
+        self.chat_job += 1
+
+        self._close_chat_dialog(window)
+
+        if self.running:
+            self._set_running(False)
+            self._set_status(text(self.language, "ready"), MUTED)
+
+    def _use_chat_plan(self, instruction: Path) -> None:
+        """Check the pasted plan, keeping it on screen until it is accepted.
+
+        The dialog stays open while the reply is validated: a rejected plan
+        is usually a small mistake in the JSON, and throwing the text away
+        would mean pasting it again to fix a comma.
+        """
+
+        reply = ""
+
+        if self.chat_reply is not None:
+            reply = self.chat_reply.get("1.0", "end").strip()
+
+        if not reply:
+            message = text(self.language, "chat_empty")
+
+            self._set_status(message, FAILURE)
+            self._set_chat_error(message)
+            return
+
+        self.chat_job += 1
+
+        self._set_chat_error("")
+        self._set_chat_busy(True)
+
+        self._set_running(True)
+        self._set_status(text(self.language, "chat_reading"), MUTED)
+
+        self.worker = threading.Thread(
+            target=self._work_chat_plan,
+            args=(instruction, reply, self.chat_job),
+            daemon=True,
+        )
+        self.worker.start()
+
+    def _work_chat_plan(
+        self,
+        instruction: Path,
+        reply: str,
+        token: int,
+    ) -> None:
+        try:
+            runtime, kind, payload = plan_from_reply(
+                instruction, reply
+            )
+        except Exception as exc:  # never leave the window waiting
+            self.messages.put(("chat_error", (exc, token), None))
+            return
+
+        if kind == "plan":
+            self.messages.put(
+                ("chat_plan", (runtime, payload, token), None)
+            )
+            return
+
+        self.messages.put(("chat_error", (payload, token), None))
+
+    # ------------------------------------------------------------------
     # Plan preview
     # ------------------------------------------------------------------
 
@@ -1523,6 +1917,17 @@ class OfficeAgentWindow:
 
             self.plan_window = None
 
+        self.chat_job += 1  # drop any plan still being checked
+
+        if self.chat_window is not None:
+            try:
+                self.chat_window.grab_release()
+                self.chat_window.destroy()
+            except tk.TclError:
+                pass
+
+            self.chat_window = None
+
         self._release_tk_objects()
 
         try:
@@ -1549,6 +1954,7 @@ class OfficeAgentWindow:
             "endpoint_var",
             "api_key_var",
             "ai_status_var",
+            "chat_error_var",
             "review_var",
         ):
             setattr(self, name, None)

@@ -103,8 +103,9 @@ Create a job, then open its instruction:
 .venv/bin/python run.py init jobs/my-job
 ```
 
-Fill `jobs/my-job/inputs/`, edit the YAML block in
-`jobs/my-job/instruction.docx`, and run:
+Put the files you were given in `jobs/my-job/inputs/`, write the task in
+`jobs/my-job/instruction.docx` the way you would explain it to a colleague,
+and run:
 
 ```bash
 .venv/bin/python run.py jobs/my-job
@@ -124,8 +125,10 @@ aggregates revenue by region, and produces a report DOCX, its TXT export, a
 CSV of the filtered rows, a summary workbook, and a copied note file. It also
 reads the table inside `inputs/summary.docx` and writes it out as both XLSX
 and CSV, stamps the job's `metadata` onto every workbook and document, and
-renders a PNG preview of the finished report into `evidence/`. Rebuild the
-example inputs with `python examples/build_examples.py`.
+renders a PNG preview of the finished report into `evidence/`. The brief is
+plain prose, like a real handover, and the plan it runs is committed as
+`examples/sales-pack/plan.json`, so the example needs no model and no key.
+Rebuild it with `python examples/build_examples.py`.
 
 List every tool and action:
 
@@ -137,10 +140,11 @@ List every tool and action:
 
 ```
 jobs/my-job/
-  instruction.docx     exactly one instruction (.docx, .txt or .md)
-  inputs/              source files, read-only
+  instruction.docx     the brief: the task, in plain language
+  inputs/              the rest of the packet: reference files and files to change
   output/              every generated file
   evidence/            screenshots and other verification artefacts
+  plan.json            the plan this packet runs, reused while nothing changes
   run.log, state.json  written by the runtime
   report.json          per-step status, messages and generated outputs
 ```
@@ -151,12 +155,76 @@ plans that write outside `output/` (screenshots may also write to
 `evidence/`), modify anything under `inputs/`, or reference a step that has
 not run yet.
 
-## Instruction format
+## The brief
 
-The instruction document contains YAML or JSON. It can be the whole document
-or a fenced block (```` ```yaml ```` ... ```` ``` ````) inside normal prose,
-which is easier to write in Word. Word's smart quotes and non-breaking spaces
-are normalized before parsing.
+The document you hand over is a task assignment, not a program. Write it the
+way you would explain the job to a colleague: what the finished files should
+be, which inputs to use by name, and the rules that matter — a threshold,
+which sheet, what a column means. The agent plans the work from that.
+
+The brief and everything that came with it are the **packet**:
+
+- the brief itself (`.docx`, `.txt` or `.md`),
+- everything in `inputs/`,
+- any file sitting beside the brief, because a folder somebody hands over
+  usually looks like that and none of it needs filing away first.
+
+A packet does not have to be tidied up first. If several documents sit
+beside each other, the one named `instruction`, `brief`, `task` or
+`assignment` is the brief; otherwise the longest document is, and every
+other Word, Excel, CSV or text file is packet content the planner may read.
+
+Word and Excel material is read for you before planning: paragraphs, tables,
+sheet names, headers and sample rows. That profile is what the planner works
+from, so the columns it writes into the plan are the ones that exist.
+
+A packet also often contains files the job has to *change*. Those are edited
+by copy: `filesystem.work_on_copy` puts the file in `output/` and the plan
+edits that copy, so `inputs/` is byte-for-byte what was handed over after
+the run.
+
+A job is planned in this order, and `run.log` always says which one happened:
+
+1. `plan.json` beside the brief, while the packet is unchanged.
+2. A job spec written into the brief (see below) — used as-is, no model.
+3. The configured model, for a prose brief.
+4. Without a model, the run stops and the window offers **Plan in a
+   chatbot** instead.
+
+### Without an API key: plan in a chatbot
+
+Select the brief and press **Plan in a chatbot**. The program writes
+`plan-request.md` beside the brief — the same instructions, brief and packet
+profile the model would have been given — and opens a window where you copy
+that text into ChatGPT, Claude, Gemini or any other chat, then paste the
+reply back. The reply is validated exactly like a model's plan, previewed
+before anything runs, and saved to `plan.json`, so from then on the packet
+just needs Run.
+
+### When a step fails
+
+A run stops at the first failing step. If the plan came from a model (the
+API, or a pasted chatbot reply) and the failure is a name that does not
+exist — a wrong sheet, column, file or table — the failing step and its
+error go back to the planner for a correction, at most twice. The run then
+continues from that step: work that already succeeded is not repeated, so
+an `append_rows` cannot double up. Each correction is recorded in
+`plan.json` under `revisions`, with the error and the steps it replaced.
+Everything else — a permission error, a corrupt file, a job spec you pinned
+by hand — is reported and left alone.
+
+The plan the model produces is saved to `plan.json`, so the next run of the
+same packet is deterministic and needs no model. Edit the brief or any input
+and the saved plan is ignored automatically: the check hashes the real
+contents of every file, so a change anywhere inside an attachment counts,
+not just one the profile shows.
+
+### Job specs (optional)
+
+If you would rather pin every step by hand, a brief may contain a YAML or
+JSON spec: the whole document, or a fenced block (```` ```yaml ```` ...
+```` ``` ````) inside normal prose. Word's smart quotes and non-breaking
+spaces are normalized before parsing.
 
 ```yaml
 title: Monthly sales pack
@@ -334,6 +402,7 @@ otherwise.
 | --- | --- |
 | `list_files` | `path` |
 | `copy_file` | `path`, `destination_path`, optional `overwrite` |
+| `work_on_copy` | `path`, `output_path` — copies an input and returns the copy's `path`, so later steps edit the copy |
 
 ## Document metadata
 

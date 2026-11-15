@@ -9,11 +9,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from agent import ai_config
+from agent import ai_config, chatplan
 from agent.joblock import JobBusyError, JobLock
 from agent.registry import build_registry
 from agent.runtime import AgentRuntime
-from agent.spec import SpecError
+from agent.spec import SpecError, resolve_job_paths
 from agent.ui import describe_state, instruction_job_dir, is_instruction_file
 
 
@@ -99,6 +99,63 @@ def execute_plan(
 
     except Exception as exc:  # surfaced in the window, not a crash
         return "error", exc, []
+
+
+def plan_request(instruction: Path) -> tuple[Path, str]:
+    """Build the planning request for a chatbot and save it beside the brief.
+
+    This is the no-key path: the same instructions, brief and packet profile
+    the model would get, as text a person can paste into any chat window.
+    """
+
+    runtime = build_runtime(instruction)
+
+    brief = runtime.read_instruction()
+
+    text = chatplan.build_request(
+        brief.text,
+        runtime.profile(),
+        Path(instruction).name,
+    )
+
+    path = chatplan.write_request(
+        Path(runtime.job_path),
+        text,
+    )
+
+    return path, text
+
+
+def plan_from_reply(
+    instruction: Path,
+    reply: str,
+) -> tuple[AgentRuntime, str, Any]:
+    """Validate a plan pasted back from a chatbot and keep it.
+
+    Returns ``(runtime, kind, payload)`` where kind is ``"plan"`` with the
+    JobPlan, or ``"invalid"`` with the error that explains what is wrong, so
+    the window can show it and the reply can be corrected.
+    """
+
+    runtime = build_runtime(instruction)
+
+    try:
+        plan = chatplan.parse_reply(reply)
+
+        for step in plan.steps:
+            step.arguments = resolve_job_paths(
+                step.arguments,
+                Path(runtime.job_path),
+            )
+
+        runtime.validate_plan(plan)
+
+    except Exception as exc:  # shown in the window, never a crash
+        return runtime, "invalid", exc
+
+    runtime.save_plan(plan, "chat")
+
+    return runtime, "plan", plan
 
 
 def run_instruction(

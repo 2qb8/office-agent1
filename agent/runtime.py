@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 from agent.dataflow import iter_references
 from agent.executor import Executor
 from agent.instruction_loader import load_instruction
 from agent.job import (
+    brief_candidates,
     create_job,
     find_instruction_file,
     make_job_id,
@@ -17,11 +19,19 @@ from agent.llm_factory import (
     try_create_llm,
 )
 from agent.logger import JobLogger
-from agent.models import JobInstruction, JobPlan, JobState
+from agent.models import (
+    JobInstruction,
+    JobPlan,
+    JobState,
+    StepStatus,
+)
+from agent.planfile import fingerprint, load_plan, save_plan
+from agent.profile import profile_packet
 from agent.registry import ToolRegistry
 from agent.spec import (
     SpecError,
     build_plan_from_text,
+    relativize_job_paths,
     resolve_job_paths,
 )
 
@@ -33,6 +43,7 @@ WRITE_ACTIONS: dict[tuple[str, str], str] = {
     ("excel", "create_workbook"): "output_path",
     ("text", "write"): "output_path",
     ("filesystem", "copy_file"): "destination_path",
+    ("filesystem", "work_on_copy"): "output_path",
     ("screenshot", "document"): "output_path",
     ("screenshot", "workbook"): "output_path",
 }
@@ -58,6 +69,26 @@ MODIFY_ACTIONS: set[tuple[str, str]] = {
     ("word", "append_image"),
     ("word", "set_metadata"),
 }
+
+
+# How many times a failed step is sent back to the planner before the run
+# is left failed. Two corrections is enough for a wrong column or sheet
+# name, and it bounds what one broken brief can cost.
+MAX_REPAIRS = 2
+
+# Failures worth sending back: the plan named something that is not there.
+# Anything else (a permission error, a full disk, a broken file) is not a
+# planning mistake, and asking again would only spend tokens.
+REPAIRABLE_ERRORS = (
+    "not found",
+    "does not exist",
+    "no such file",
+    "unknown column",
+    "unknown sheet",
+    "missing required argument",
+    "expected .xlsx",
+    "expected .docx",
+)
 
 
 class PlanValidationError(RuntimeError):
@@ -92,6 +123,13 @@ class AgentRuntime:
             self.job_path / "run.log"
         )
 
+        self._profile: dict | None = None
+        self._instruction: Path | None = None
+
+        # Where the plan came from, and every correction made to it.
+        self.plan_source = "unknown"
+        self.revisions: list[dict] = []
+
     # ------------------------------------------------------------------
     # Instructions
     # ------------------------------------------------------------------
@@ -100,7 +138,29 @@ class AgentRuntime:
         if self.instruction_path is not None:
             return self.instruction_path
 
-        return find_instruction_file(self.job_path)
+        if self._instruction is not None:
+            return self._instruction
+
+        candidates = brief_candidates(self.job_path)
+
+        chosen = find_instruction_file(self.job_path)
+
+        self._instruction = chosen
+
+        if len(candidates) > 1:
+            others = ", ".join(
+                path.name
+                for path in candidates
+                if path != chosen
+            )
+
+            self.logger.log(
+                "INSTRUCTION",
+                f"Using {chosen.name} as the brief; "
+                f"the rest of the packet: {others}",
+            )
+
+        return chosen
 
     def read_instruction(self) -> JobInstruction:
         instruction_file = self.find_instruction()
@@ -135,17 +195,35 @@ class AgentRuntime:
         """
         Build the plan for a job.
 
-        A structured job spec in the instruction always wins. Without a
-        spec, use_ai=True forces the AI planner, use_ai=False forbids it,
-        and use_ai=None uses AI only when a provider is configured.
+        A plan saved beside the brief wins for as long as the packet is
+        unchanged. Otherwise a job spec written into the instruction is
+        used as-is, and a prose brief is planned from its text and the
+        packet profile. use_ai=True always asks the model, use_ai=False
+        never does.
         """
 
         if llm is not None:
             return self._create_llm_plan(instruction, llm)
 
+        profile = self.profile()
+
+        if use_ai is not True:
+            saved, note, source = load_plan(
+                self.job_path,
+                fingerprint(profile),
+            )
+
+            self.logger.log("PLANNER", note)
+
+            if saved is not None:
+                self.plan_source = source or "saved"
+                self._log_plan(saved)
+
+                return saved
+
         self.logger.log(
             "SPEC",
-            "Parsing job spec from the instruction document",
+            "Looking for a job spec in the brief",
         )
 
         try:
@@ -154,6 +232,9 @@ class AgentRuntime:
                 self.job_path,
                 source=instruction.source_file,
             )
+            self.plan_source = "spec"
+            self.save_plan(plan, "spec")
+
         except SpecError:
             if use_ai is False:
                 raise
@@ -167,12 +248,15 @@ class AgentRuntime:
 
             self.logger.log(
                 "PLANNER",
-                "No job spec found; planning with the AI model "
-                f"({settings['provider']}/"
-                f"{settings['model']})",
+                "The brief is prose; planning from it with "
+                f"{settings['provider']}/{settings['model']}",
             )
 
-            return self._create_llm_plan(instruction, llm)
+            return self._create_llm_plan(
+                instruction,
+                llm,
+                profile,
+            )
 
         self._log_plan(plan)
 
@@ -182,16 +266,21 @@ class AgentRuntime:
         self,
         instruction: JobInstruction,
         llm,
+        profile: dict | None = None,
     ) -> JobPlan:
         from agent.planner import Planner
 
-        context = self._build_context()
+        context = (
+            profile if profile is not None else self.profile()
+        )
 
         self.logger.log("PLANNER", "Creating plan with LLM")
 
+        self.plan_source = "api"
+
         plan = Planner(llm).create_plan(
             instruction.text,
-            context=context,
+            profile=context,
         )
 
         # Models produce job-relative paths, exactly like specs do.
@@ -201,72 +290,74 @@ class AgentRuntime:
                 self.job_path,
             )
 
+        self.save_plan(
+            plan,
+            "api",
+            model=getattr(llm, "model", None),
+        )
+
         self._log_plan(plan)
 
         return plan
 
-    def _build_context(self) -> dict:
-        """Inventory inputs for the LLM planner (AI configuration later)."""
+    def save_plan(
+        self,
+        plan: JobPlan,
+        source: str,
+        model: str | None = None,
+    ) -> None:
+        """Keep the plan beside the brief so the packet can be replayed.
 
-        self.logger.log(
-            "FILES",
-            "Discovering job input files",
-        )
+        A failure here only costs repeatability, so it is logged and never
+        fails the run.
+        """
 
-        filesystem = self.registry.get("filesystem")
+        try:
+            path = save_plan(
+                self.job_path,
+                plan,
+                fingerprint(self.profile()),
+                source=source,
+                model=model,
+                revisions=self.revisions,
+            )
+        except Exception as exc:
+            self.logger.log(
+                "PLANNER",
+                f"Could not save the plan: {exc}",
+            )
+            return
 
-        inventory = filesystem.run(
-            "list_files",
-            {
-                "path": str(self.job_path / "inputs"),
-            },
-        )
+        self.logger.log("PLANNER", f"Saved the plan to {path.name}")
 
-        if not inventory.success:
-            raise RuntimeError(
-                inventory.error
-                or "Could not inspect job inputs."
+    def profile(self) -> dict:
+        """What the planner sees of the packet, and what plans are keyed on.
+
+        Built once per run: every file in inputs/ plus any file sitting
+        beside the brief, described in enough detail to name sheets,
+        columns and cells without guessing.
+        """
+
+        if self._profile is None:
+            self.logger.log(
+                "FILES",
+                "Profiling the work packet",
             )
 
-        files = inventory.data.get("files", [])
-
-        self.logger.log(
-            "FILES",
-            f"Discovered {len(files)} input files",
-        )
-
-        excel_observations = []
-
-        for file in files:
-            if file["type"] != "excel":
-                continue
-
-            result = self.registry.get("excel").run(
-                "inspect",
-                {"path": file["path"]},
+            self._profile = profile_packet(
+                self.job_path,
+                self.find_instruction(),
             )
 
-            if not result.success:
-                raise RuntimeError(
-                    f"Could not inspect {file['name']}: "
-                    f"{result.error}"
-                )
+            totals = self._profile["totals"]
 
-            excel_observations.append(
-                {
-                    "file": file,
-                    "inspection": result.data,
-                }
+            self.logger.log(
+                "FILES",
+                f"Profiled {totals['files']} packet files "
+                f"({totals['characters']} characters)",
             )
 
-        return {
-            "job_root": str(self.job_path),
-            "inputs_dir": str(self.job_path / "inputs"),
-            "output_dir": str(self.job_path / "output"),
-            "evidence_dir": str(self.job_path / "evidence"),
-            "input_files": files,
-            "excel_observations": excel_observations,
-        }
+        return self._profile
 
     def _log_plan(self, plan: JobPlan) -> None:
         self.logger.log(
@@ -340,7 +431,11 @@ class AgentRuntime:
                         f"writes a file but has no '{key}'."
                     )
 
-                if action in EVIDENCE_ACTIONS:
+                if _is_reference(raw_output):
+                    # The target comes from an earlier step, whose own
+                    # arguments were validated in their turn.
+                    pass
+                elif action in EVIDENCE_ACTIONS:
                     target = Path(str(raw_output)).resolve()
 
                     if not (
@@ -372,26 +467,27 @@ class AgentRuntime:
                         "modifies a file but has no 'path'."
                     )
 
-                target = Path(str(raw_target)).resolve()
+                if not _is_reference(raw_target):
+                    target = Path(str(raw_target)).resolve()
 
-                self._require_inside(
-                    target,
-                    inputs_dir,
-                    step,
-                    "inputs/",
-                    forbidden=True,
-                )
+                    self._require_inside(
+                        target,
+                        inputs_dir,
+                        step,
+                        "inputs/",
+                        forbidden=True,
+                    )
 
-                self._require_inside(
-                    target,
-                    output_dir,
-                    step,
-                    "output/",
-                )
+                    self._require_inside(
+                        target,
+                        output_dir,
+                        step,
+                        "output/",
+                    )
 
             raw_evidence = step.arguments.get("evidence_path")
 
-            if raw_evidence:
+            if raw_evidence and not _is_reference(raw_evidence):
                 self._require_inside(
                     raw_evidence,
                     evidence_dir,
@@ -446,7 +542,13 @@ class AgentRuntime:
     # Execution
     # ------------------------------------------------------------------
 
-    def execute(self, plan: JobPlan, progress=None, cancel=None) -> JobState:
+    def execute(
+        self,
+        plan: JobPlan,
+        progress=None,
+        cancel=None,
+        resume: JobState | None = None,
+    ) -> JobState:
         self.logger.log("EXECUTOR", "Starting execution")
 
         state = Executor(
@@ -454,7 +556,7 @@ class AgentRuntime:
             self.job_path,
             cancel=cancel,
             progress=progress,
-        ).execute(plan, self.job_id)
+        ).execute(plan, self.job_id, resume=resume)
 
         self.logger.log(
             "EXECUTOR",
@@ -522,10 +624,26 @@ class AgentRuntime:
         plan: JobPlan,
         progress=None,
         cancel=None,
+        repair: bool = True,
     ) -> JobState:
-        """Run a plan already built by ``plan()`` and write the report."""
+        """Run a plan already built by ``plan()`` and write the report.
+
+        A failure caused by a name that does not exist is sent back to the
+        planner for a correction, twice at most, and the run continues from
+        the step that failed instead of starting over.
+        """
+
+        self.revisions = []
 
         state = self.execute(plan, progress=progress, cancel=cancel)
+
+        if repair and state.failed_steps:
+            plan, state = self._repair(
+                plan,
+                state,
+                progress=progress,
+                cancel=cancel,
+            )
 
         for path in self.output_files(state):
             self.logger.log("OUTPUT", path)
@@ -555,6 +673,147 @@ class AgentRuntime:
     # ------------------------------------------------------------------
     # Reporting
     # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # Repair
+    # ------------------------------------------------------------------
+
+    def _repair(
+        self,
+        plan: JobPlan,
+        state: JobState,
+        progress=None,
+        cancel=None,
+    ) -> tuple[JobPlan, JobState]:
+        """Ask the planner to correct a plan that failed, then carry on."""
+
+        if self.plan_source not in {"api", "chat"}:
+            self.logger.log(
+                "PLANNER",
+                "Not repairing: this plan was not made by a model",
+            )
+            return plan, state
+
+        llm = None
+        attempts = 0
+
+        while state.failed_steps and attempts < MAX_REPAIRS:
+            failed_id = state.failed_steps[-1]
+            result = state.results.get(failed_id)
+            error = (
+                result.error if result is not None else ""
+            ) or ""
+
+            step = next(
+                (item for item in plan.steps if item.id == failed_id),
+                None,
+            )
+
+            if step is None or not _is_repairable(error):
+                self.logger.log(
+                    "PLANNER",
+                    f"Not repairing '{failed_id}': "
+                    f"{error or 'no error message'}",
+                )
+                return plan, state
+
+            if llm is None:
+                llm = try_create_llm()
+
+                if llm is None:
+                    self.logger.log(
+                        "PLANNER",
+                        "Not repairing: no model is configured to "
+                        "revise the plan",
+                    )
+                    return plan, state
+
+            attempts += 1
+
+            self.logger.log(
+                "PLANNER",
+                f"Repair attempt {attempts}/{MAX_REPAIRS} after "
+                f"'{failed_id}': {error}",
+            )
+
+            try:
+                revised = self._revise(plan, step, error, llm)
+            except Exception as exc:
+                self.logger.log(
+                    "PLANNER",
+                    f"The revision could not be used: {exc}",
+                )
+                return plan, state
+
+            if not _keeps_completed_steps(revised, state):
+                self.logger.log(
+                    "PLANNER",
+                    "The revision changed steps that already ran; "
+                    "keeping the plan as it was",
+                )
+                return plan, state
+
+            self.revisions.append(
+                _revision_record(
+                    attempts,
+                    failed_id,
+                    error,
+                    plan,
+                    self.job_path,
+                )
+            )
+
+            self.logger.log(
+                "PLANNER",
+                f"Running the revised plan "
+                f"({len(revised.steps)} steps, {attempts} revision(s))",
+            )
+
+            state.failed_steps.clear()
+            state.status = StepStatus.RUNNING
+
+            plan = revised
+
+            state = self.execute(
+                plan,
+                progress=progress,
+                cancel=cancel,
+                resume=state,
+            )
+
+        if self.revisions:
+            self.save_plan(plan, self.plan_source)
+
+        return plan, state
+
+    def _revise(
+        self,
+        plan: JobPlan,
+        step,
+        error: str,
+        llm,
+    ) -> JobPlan:
+        from agent.planner import Planner
+
+        instruction = self.read_instruction()
+
+        revised = Planner(llm).revise(
+            instruction.text,
+            plan,
+            step,
+            error,
+            profile=self.profile(),
+        )
+
+        for revised_step in revised.steps:
+            revised_step.arguments = resolve_job_paths(
+                revised_step.arguments,
+                self.job_path,
+            )
+
+        self.validate_plan(revised)
+
+        return revised
 
     def write_report(
         self,
@@ -591,6 +850,7 @@ class AgentRuntime:
                     "steps": steps,
                     "completed_steps": state.completed_steps,
                     "failed_steps": state.failed_steps,
+                    "revisions": self.revisions,
                     "outputs": self.output_files(state),
                 },
                 indent=2,
@@ -625,6 +885,64 @@ class AgentRuntime:
                 paths.append(resolved)
 
         return paths
+
+
+def _is_repairable(error: str) -> bool:
+    """Is this failure a mistake in the plan rather than in the machine?"""
+
+    text = (error or "").lower()
+
+    return any(hint in text for hint in REPAIRABLE_ERRORS)
+
+
+def _keeps_completed_steps(plan: JobPlan, state: JobState) -> bool:
+    """A revision may only change the part of the plan that has not run."""
+
+    completed = state.completed_steps
+
+    if len(plan.steps) < len(completed):
+        return False
+
+    return [
+        step.id for step in plan.steps[: len(completed)]
+    ] == completed
+
+
+def _revision_record(
+    attempt: int,
+    step_id: str,
+    error: str,
+    plan: JobPlan,
+    job_path: Path,
+) -> dict:
+    """What plan.json keeps about one correction."""
+
+    return {
+        "attempt": attempt,
+        "step": step_id,
+        "error": error,
+        "created": datetime.now().isoformat(timespec="seconds"),
+        "replaced": [
+            {
+                "id": step.id,
+                "description": step.description,
+                "tool": step.tool,
+                "action": step.action,
+                "arguments": relativize_job_paths(
+                    step.arguments,
+                    job_path,
+                ),
+                "depends_on": list(step.depends_on),
+            }
+            for step in plan.steps
+        ],
+    }
+
+
+def _is_reference(value) -> bool:
+    """A "$step.field" argument, resolved only while the plan runs."""
+
+    return isinstance(value, str) and value.strip().startswith("$")
 
 
 def _is_relative_to(path: Path, directory: Path) -> bool:

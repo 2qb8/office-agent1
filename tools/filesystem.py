@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,7 @@ class FilesystemTool(Tool):
     actions = (
         "list_files",
         "copy_file",
+        "work_on_copy",
     )
 
     def run(
@@ -26,6 +28,9 @@ class FilesystemTool(Tool):
 
         if action == "copy_file":
             return self._copy_file(arguments)
+
+        if action == "work_on_copy":
+            return self._work_on_copy(arguments)
 
         return ToolResult(
             success=False,
@@ -72,8 +77,6 @@ class FilesystemTool(Tool):
                 exist_ok=True,
             )
 
-            import shutil
-
             shutil.copy2(source, destination)
 
         except OSError as exc:
@@ -86,6 +89,76 @@ class FilesystemTool(Tool):
             success=True,
             message=(
                 f"Copied {source.name} to {destination.name}"
+            ),
+            data={
+                "path": str(destination),
+                "source": str(source),
+                "size_bytes": destination.stat().st_size,
+            },
+            evidence=[str(destination)],
+        )
+
+    def _work_on_copy(
+        self,
+        arguments: dict[str, Any],
+    ) -> ToolResult:
+        """Copy a supplied file into output/ and edit the copy from there.
+
+        A packet usually contains files the job must change, and those files
+        must survive the run untouched. This makes that the normal move: the
+        copy's path comes back as ``path``, so later steps edit it while the
+        original in inputs/ stays exactly as it was handed over.
+        """
+
+        raw_source = arguments.get("path")
+        raw_output = arguments.get("output_path")
+
+        if not raw_source or not raw_output:
+            return ToolResult(
+                success=False,
+                error=(
+                    "work_on_copy requires 'path' and "
+                    "'output_path'."
+                ),
+            )
+
+        source = Path(str(raw_source)).resolve()
+        destination = Path(str(raw_output)).resolve()
+
+        if not source.is_file():
+            return ToolResult(
+                success=False,
+                error=f"Source file not found: {source}",
+            )
+
+        if destination == source:
+            return ToolResult(
+                success=False,
+                error=(
+                    "work_on_copy needs a new path; it never edits "
+                    "the original."
+                ),
+            )
+
+        try:
+            destination.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+
+            shutil.copy2(source, destination)
+
+        except OSError as exc:
+            return ToolResult(
+                success=False,
+                error=f"Failed to copy file: {exc}",
+            )
+
+        return ToolResult(
+            success=True,
+            message=(
+                f"Working on a copy of {source.name} "
+                f"as {destination.name}"
             ),
             data={
                 "path": str(destination),

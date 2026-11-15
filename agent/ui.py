@@ -47,8 +47,9 @@ STRINGS: dict[str, dict[str, str]] = {
             "Choose a .docx, .txt or .md instruction file."
         ),
         "no_spec": (
-            "This instruction has no 'steps' block, and no AI provider is "
-            "configured. Add one, or fill in the AI planner section."
+            "This brief has no 'steps' block, and no AI provider is "
+            "configured. Press Plan in a chatbot to plan it in a web chat, "
+            "or fill in the AI planner section."
         ),
         "done": "Done — {count} file(s) created.",
         "failed": "Run failed: {error}",
@@ -96,6 +97,25 @@ STRINGS: dict[str, dict[str, str]] = {
         "example": "Try an example",
         "example_copied": "Example copied to {path} — press Run.",
         "example_failed": "Could not copy the example: {error}",
+        "chat": "Plan in a chatbot…",
+        "chat_title": "Plan in a chatbot",
+        "chat_intro": (
+            "Copy the request into ChatGPT, Claude, Gemini or any chat "
+            "window, then paste the reply into the box below. The plan is "
+            "checked before anything runs, and it is saved beside the "
+            "brief so the next run needs no chat at all."
+        ),
+        "chat_request": "Request",
+        "chat_copy": "Copy request",
+        "chat_copied": "Request copied — paste it into the chat window.",
+        "chat_saved": "Saved to {path}",
+        "chat_reply": "Reply from the chatbot",
+        "chat_use": "Use this plan",
+        "chat_empty": "Paste the chatbot's reply first.",
+        "chat_reading": "Reading the packet…",
+        "chat_ready": "Plan accepted from the chatbot.",
+        "chat_invalid": "That plan cannot run: {error}",
+        "chat_failed": "Could not build the request: {error}",
     },
     "ru": {
         "subtitle": "Документ с инструкцией на входе — готовые файлы на выходе.",
@@ -114,8 +134,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "missing_instruction": "Файл не найден.",
         "unsupported_instruction": "Выберите файл инструкции .docx, .txt или .md.",
         "no_spec": (
-            "В инструкции нет блока «steps», а ИИ не настроен. Добавьте "
-            "блок в инструкцию или заполните раздел «ИИ-планировщик»."
+            "В брифе нет блока «steps», а ИИ не настроен. Нажмите «План в "
+            "чатботе», чтобы спланировать в веб-чате, или заполните раздел "
+            "«ИИ-планировщик»."
         ),
         "done": "Готово — создано файлов: {count}.",
         "failed": "Ошибка: {error}",
@@ -164,6 +185,25 @@ STRINGS: dict[str, dict[str, str]] = {
         "example": "Попробовать пример",
         "example_copied": "Пример скопирован в {path} — нажмите «Запустить».",
         "example_failed": "Не удалось скопировать пример: {error}",
+        "chat": "План в чатботе…",
+        "chat_title": "План в чатботе",
+        "chat_intro": (
+            "Скопируйте запрос в ChatGPT, Claude, Gemini или любой другой "
+            "чат, затем вставьте ответ в поле ниже. План проверяется до "
+            "запуска и сохраняется рядом с брифом — следующий запуск "
+            "обойдётся без чата."
+        ),
+        "chat_request": "Запрос",
+        "chat_copy": "Копировать запрос",
+        "chat_copied": "Запрос скопирован — вставьте его в окно чата.",
+        "chat_saved": "Сохранено в {path}",
+        "chat_reply": "Ответ чатбота",
+        "chat_use": "Использовать этот план",
+        "chat_empty": "Сначала вставьте ответ чатбота.",
+        "chat_reading": "Читаем пакет…",
+        "chat_ready": "План из чатбота принят.",
+        "chat_invalid": "Такой план выполнить нельзя: {error}",
+        "chat_failed": "Не удалось собрать запрос: {error}",
     },
 }
 

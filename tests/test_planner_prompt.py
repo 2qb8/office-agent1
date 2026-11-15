@@ -23,12 +23,18 @@ class PlannerPromptTests(unittest.TestCase):
         )
 
     def test_the_prompt_asks_for_the_instruction_language(self):
-        # A Russian instruction must not come back with English headings just
+        # A Russian brief must not come back with English headings just
         # because the prompt itself is in English.
         self.assertIn(
-            "in the language the instruction is written",
+            "in the language the brief is written in",
             SYSTEM_PROMPT,
         )
+
+    def test_the_prompt_plans_a_prose_brief_rather_than_a_spec(self):
+        # The brief is a task assignment; the YAML spec is the exception.
+        self.assertIn("BRIEF: a task assignment", SYSTEM_PROMPT)
+        self.assertIn("PACKET PROFILE", SYSTEM_PROMPT)
+        self.assertNotIn("The instruction may be plain prose", SYSTEM_PROMPT)
 
     def test_every_registered_action_is_in_the_prompt(self):
         missing = []

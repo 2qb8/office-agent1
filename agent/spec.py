@@ -39,10 +39,13 @@ _REPLACEMENTS = str.maketrans(
 )
 
 SPEC_HELP = (
-    "An instruction document must contain a job spec written in YAML "
-    "or JSON: either the whole document, or inside a fenced block such as "
-    "```yaml ... ```. The spec needs a non-empty 'steps' list where every "
-    "step has 'tool' and 'action', for example:\n\n"
+    "This brief has no job spec, and no AI model is configured to plan "
+    "it from the text.\n"
+    "Configure the planner with 'python run.py ai setup', or write the "
+    "steps yourself as a job spec in YAML or JSON: either the whole "
+    "document, or inside a fenced block such as ```yaml ... ```. A spec "
+    "needs a non-empty 'steps' list where every step has 'tool' and "
+    "'action', for example:\n\n"
     "steps:\n"
     "  - id: read_source\n"
     "    tool: excel\n"
@@ -229,6 +232,68 @@ def resolve_job_paths(
         ]
 
     return value
+
+
+def relativize_job_paths(
+    value: Any,
+    job_root: Path,
+) -> Any:
+    """The inverse of :func:`resolve_job_paths`, for saving a plan.
+
+    A saved plan keeps ``inputs/sales.xlsx`` rather than
+    ``C:\\Users\\...\\inputs\\sales.xlsx``, so the job folder can be moved
+    or shared and still run.
+    """
+
+    if isinstance(value, dict):
+        relative: dict[str, Any] = {}
+
+        for key, item in value.items():
+            if _is_path_key(key):
+                relative[key] = _relativize_job_path(
+                    item,
+                    job_root,
+                )
+            else:
+                relative[key] = relativize_job_paths(
+                    item,
+                    job_root,
+                )
+
+        return relative
+
+    if isinstance(value, list):
+        return [
+            relativize_job_paths(item, job_root)
+            for item in value
+        ]
+
+    return value
+
+
+def _relativize_job_path(
+    value: Any,
+    job_root: Path,
+) -> Any:
+    if not isinstance(value, str):
+        return value
+
+    stripped = value.strip()
+
+    if not stripped or stripped.startswith("$"):
+        return value
+
+    path = Path(stripped)
+
+    if not path.is_absolute():
+        return value
+
+    try:
+        return path.resolve().relative_to(
+            Path(job_root).resolve()
+        ).as_posix()
+    except ValueError:
+        return value
 
 
 def _is_path_key(key: Any) -> bool:

@@ -12,6 +12,7 @@ script.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from docx import Document
@@ -22,7 +23,18 @@ from openpyxl.styles import Font
 ROOT = Path(__file__).resolve().parent
 JOB = ROOT / "sales-pack"
 
-INSTRUCTION_YAML = """\
+if str(ROOT.parent) not in sys.path:
+    sys.path.insert(0, str(ROOT.parent))
+
+from agent.planfile import fingerprint, save_plan  # noqa: E402
+from agent.profile import profile_packet  # noqa: E402
+from agent.spec import build_plan_from_text  # noqa: E402
+
+
+# The example ships two ways to plan the same job: the prose brief a person
+# would write (instruction.docx) and this spec, which produces the committed
+# plan.json so the example also runs with no model and no key.
+EXAMPLE_SPEC = """\
 title: Monthly sales pack
 
 metadata:
@@ -177,29 +189,93 @@ Sources:
 - Revenue is already net of discounts.
 """
 
+# The brief, in the order it reads: prose paragraphs and a bullet list.
+BRIEF = [
+    (
+        "normal",
+        "Please build this month's regional sales pack for Thursday's "
+        "management meeting. The numbers are in inputs/sales.xlsx, "
+        "worksheet \"Sales\".",
+    ),
+    (
+        "normal",
+        "A deal counts as large when it has 20 units or more. Revenue "
+        "there is already net of discounts, so leave it as it is.",
+    ),
+    ("normal", "What I need in output/:"),
+    (
+        "bullet",
+        "region-summary.xlsx \u2014 revenue per region from the large deals, "
+        "one clean sheet with the region table.",
+    ),
+    (
+        "bullet",
+        "sales-report.docx \u2014 a short report: the title, one line "
+        "explaining what the reader is looking at, the region table, and a "
+        "section listing the large deals.",
+    ),
+    ("bullet", "sales-report.txt \u2014 the same report as plain text."),
+    (
+        "bullet",
+        "big-deals.csv \u2014 the large deals, for the team that lives in "
+        "spreadsheets.",
+    ),
+    (
+        "bullet",
+        "docx-table.xlsx and docx-table.csv \u2014 the small table inside "
+        "inputs/summary.docx, written out both ways.",
+    ),
+    ("bullet", "notes.txt \u2014 the notes file copied across untouched."),
+    (
+        "normal",
+        "Also drop a PNG preview of the finished report into evidence/ for "
+        "the deck, and set the author to \"Sales Operations\" with the "
+        "keywords sales, report, monthly.",
+    ),
+]
+
 
 def build_instruction() -> None:
+    """Write the brief the way somebody would actually hand the job over."""
+
     document = Document()
 
     document.add_heading("Monthly sales pack", level=1)
 
-    document.add_paragraph(
-        "Build the regional sales pack from inputs/sales.xlsx."
-    )
-
-    document.add_paragraph(
-        "The YAML block below is the job spec. Edit it and re-run "
-        "the job to change the output."
-    )
-
-    document.add_paragraph("```yaml")
-
-    for line in INSTRUCTION_YAML.strip().splitlines():
-        document.add_paragraph(line)
-
-    document.add_paragraph("```")
+    for kind, line in BRIEF:
+        document.add_paragraph(
+            line,
+            style="List Bullet" if kind == "bullet" else None,
+        )
 
     document.save(JOB / "instruction.docx")
+
+
+def build_plan() -> None:
+    """Write plan.json for the committed brief.
+
+    The plan is generated from the spec stored in this file, so the prose
+    brief people read and the plan the job runs cannot drift apart while
+    both stay in one place. A saved plan only runs while the packet it was
+    made from is unchanged, so this is regenerated whenever the example
+    changes.
+    """
+
+    plan = build_plan_from_text(EXAMPLE_SPEC, JOB)
+
+    profile = profile_packet(
+        JOB,
+        JOB / "instruction.docx",
+    )
+
+    path = save_plan(
+        JOB,
+        plan,
+        fingerprint(profile),
+        source="spec",
+    )
+
+    print(f"Example plan: {path}")
 
 
 def build_inputs() -> None:
@@ -241,6 +317,7 @@ def main() -> None:
 
     build_inputs()
     build_instruction()
+    build_plan()
 
     print(f"Example job ready: {JOB}")
 

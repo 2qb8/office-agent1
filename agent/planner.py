@@ -5,21 +5,32 @@ import re
 from typing import Any
 
 from agent.llm import LLM
-from agent.models import JobPlan
+from agent.models import JobPlan, PlanStep
 
 
 SYSTEM_PROMPT = """\
-You plan file-automation jobs for a deterministic agent that works on
+You turn a work packet into a plan for a deterministic agent that works on
 DOCX, XLSX, CSV and text files.
 
-Return ONE JSON object and nothing else:
+You get two things:
+
+- BRIEF: a task assignment written by a person, in prose. It says what the
+  finished job should look like. It is not a program and not a template.
+- PACKET PROFILE: a JSON description of every file that came with it. For
+  Word files: the paragraphs and each table's header and first rows. For
+  Excel files: every sheet with its size, headers and sample rows. For text
+  and CSV files: the first lines.
+
+Plan the whole job the brief asks for, from reading the files to the
+finished documents, using only the tools below. Return ONE JSON object and
+nothing else:
 
 {
-  "goal": "short description",
+  "goal": "one line naming the finished job",
   "steps": [
     {
       "id": "unique_step_id",
-      "description": "what this step does",
+      "description": "what this step does, in the brief's language",
       "tool": "tool name",
       "action": "tool action",
       "arguments": {},
@@ -28,11 +39,32 @@ Return ONE JSON object and nothing else:
   ]
 }
 
-Steps run in order; execution stops at the first failure.
+Steps run in order and stop at the first failure.
+
+HOW TO PLAN
+- Read the profile before you write anything. Every file name, sheet name,
+  column name and cell you mention must appear in the profile or come from
+  an earlier discovery step. Never invent one, never guess a spelling.
+- Start with the steps that read the data you need (read_table, inspect),
+  then transform it, then write the files the brief asks for.
+- You write the words. Report headings, paragraphs, table labels and
+  prose belong in the plan, in the brief's language. Do not leave a
+  paragraph as a placeholder.
+- Numbers, totals and filtered rows must come from earlier steps through
+  "$step.field" references, never typed in by hand.
+- Use as many steps as the job needs and no more; most jobs are 4 to 15.
+- The packet may arrive as loose files rather than a tidy folder. Every
+  file in the profile except the brief is material you may read, and any
+  of them may be a file the job has to change.
+- When the brief is vague about a detail that cannot change the result
+  (a title, a paragraph's wording), decide it sensibly and move on.
 
 PATHS
-- Paths are relative to the job folder: read from inputs/, write to output/.
-- Never modify anything inside inputs/.
+- Paths are relative to the job folder: read from inputs/, write to
+  output/. Screenshots may also go to evidence/.
+- Never modify anything inside inputs/. To change a supplied file, put a
+  copy in output/ with filesystem.work_on_copy, then edit "$step.path"
+  from that copy. The original must survive the run unchanged.
 - Actions that create a file need output_path (filesystem.copy_file uses
   destination_path). Generated files must stay inside output/.
 
@@ -40,6 +72,66 @@ DATA BETWEEN STEPS
 - A "$step_id.field" string is replaced by the result of an earlier step,
   for example "$sales.rows" or "$totals.headers".
 - read_table results contain: headers, rows, row_count, column_count.
+- inspect results describe a file without reading all of it.
+
+EXAMPLE
+
+Brief: "Take inputs/stock.xlsx, sheet Stock. Put every item with fewer than
+5 units into output/low-stock.xlsx and write a one-page note in
+output/note.docx."
+
+Profile: inputs/stock.xlsx, sheet Stock, headers [Item, Units, Site].
+
+{
+  "goal": "Low stock list and a short note",
+  "steps": [
+    {
+      "id": "stock",
+      "description": "Read the stock sheet",
+      "tool": "excel",
+      "action": "read_table",
+      "arguments": {"path": "inputs/stock.xlsx", "sheet": "Stock"}
+    },
+    {
+      "id": "low",
+      "description": "Keep the items with fewer than 5 units",
+      "tool": "table",
+      "action": "filter",
+      "arguments": {
+        "headers": "$stock.headers", "rows": "$stock.rows",
+        "column": "Units", "op": "<", "value": 5
+      }
+    },
+    {
+      "id": "sheet_out",
+      "description": "Write the short list as a workbook",
+      "tool": "excel",
+      "action": "create_workbook",
+      "arguments": {
+        "output_path": "output/low-stock.xlsx",
+        "sheets": [
+          {"name": "Low stock", "headers": "$low.headers",
+           "rows": "$low.rows"}
+        ]
+      }
+    },
+    {
+      "id": "note",
+      "description": "Write the note",
+      "tool": "word",
+      "action": "create_document",
+      "arguments": {
+        "output_path": "output/note.docx",
+        "elements": [
+          {"type": "heading", "text": "Low stock", "level": 1},
+          {"type": "paragraph",
+           "text": "Items with fewer than five units are listed below."},
+          {"type": "table", "headers": "$low.headers", "rows": "$low.rows"}
+        ]
+      }
+    }
+  ]
+}
 
 TOOLS AND ACTIONS
 - excel.inspect(path[, sheet])
@@ -74,6 +166,7 @@ TOOLS AND ACTIONS
 - table.aggregate(headers, rows, column, op[, group_by])
 - table.limit(headers, rows, limit[, offset])
 - filesystem.copy_file(path, destination_path)
+- filesystem.work_on_copy(path, output_path) — copy an input, then edit it
 - filesystem.list_files(path)
 - screenshot.document(path, output_path[, scale])
 - screenshot.workbook(path, output_path[, sheet, scale, max_rows, max_columns])
@@ -84,12 +177,12 @@ METADATA
 - Defaults live in the agent; the environment variable
   OFFICE_AGENT_AUTHOR overrides the author. A spec can set a job-level
   'metadata' block or per-step 'metadata'; step arguments win.
-- Use word.set_metadata or excel.set_metadata to change an existing file.
+- Set the author and title the brief mentions; otherwise leave them alone.
 
 SCREENSHOTS
 - screenshot.document and screenshot.workbook render the file to a PNG
-  preview. Use them when the job should include visual evidence, then
-  attach the PNG with word.append_image or excel.add_image.
+  preview. Use them when the brief asks for visual evidence, then attach
+  the PNG with word.append_image or excel.add_image.
 
 WORD ELEMENTS
 {"type": "heading", "text": "...", "level": 1}
@@ -105,17 +198,40 @@ OPERATORS
 
 LANGUAGE
 - Write every user-visible string you produce (headings, paragraph text,
-  table headers, table cells) in the language the instruction is written
-  in, unless the instruction asks for another one.
+  table headers, table cells) in the language the brief is written in,
+  unless the brief asks for another one.
 
 RULES
 - Use only the tools, actions and arguments listed above.
-- Use exact filenames, worksheet names and column names from the job
-  context. Never invent them.
+- Use exact filenames, worksheet names and column names from the packet
+  profile or an earlier step's results. Never invent them.
 - If a needed detail is unknown, add a discovery step (inspect, read_table,
   list_files) before the step that needs it.
-- The instruction may be plain prose; infer the work from it and the context.
 - Do not include prose, comments or code fences in your reply.
+"""
+
+REPAIR_PROMPT = """\
+You are revising a plan that failed while it ran. You get the brief, the
+packet profile, the plan, and the step that failed with its error message.
+
+Reply with the whole corrected plan as ONE JSON object, in exactly the same
+format as the original:
+
+{"goal": "...", "steps": [{"id", "description", "tool", "action",
+"arguments", "depends_on"}]}
+
+RULES
+- Steps before the failed step already ran: keep their ids, tools, actions
+  and arguments unchanged, in the same order. Their results are still in
+  use, and they are not run again.
+- Fix the failed step, and any later step that depends on it. The usual
+  cause is a name that does not exist: look in the packet profile for the
+  real sheet, column, file or table name and use that exact spelling.
+- Keep the steps the brief still needs; do not drop work that was never
+  done.
+- If the failure means the brief cannot be done as written, return the same
+  steps again unchanged rather than inventing new files.
+- No prose, no comments, no code fences.
 """
 
 FENCE_PATTERN = re.compile(
@@ -124,27 +240,89 @@ FENCE_PATTERN = re.compile(
 )
 
 
+def revision_request(
+    brief: str,
+    plan: JobPlan,
+    failed: PlanStep,
+    error: str,
+    profile: dict | None = None,
+) -> str:
+    """The text a repair call sends back to the planner."""
+
+    parts = [
+        "BRIEF (the task assignment):",
+        "",
+        brief.strip(),
+        "",
+        "PACKET PROFILE (JSON):",
+        "```json",
+        json.dumps(
+            profile or {},
+            ensure_ascii=False,
+            indent=2,
+            default=str,
+        ),
+        "```",
+        "",
+        "PLAN THAT FAILED (JSON):",
+        "```json",
+        json.dumps(
+            {
+                "goal": plan.goal,
+                "steps": [
+                    {
+                        "id": step.id,
+                        "description": step.description,
+                        "tool": step.tool,
+                        "action": step.action,
+                        "arguments": step.arguments,
+                        "depends_on": list(step.depends_on),
+                    }
+                    for step in plan.steps
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+            default=str,
+        ),
+        "```",
+        "",
+        f"FAILED STEP: {failed.id} ({failed.tool}.{failed.action})",
+        "",
+        "ERROR:",
+        error.strip() or "(the step did not say why)",
+        "",
+        "Return the corrected plan as one JSON object.",
+    ]
+
+    return "\n".join(parts) + "\n"
+
+
 class Planner:
-    """Turns an instruction (and job context) into a JobPlan with an LLM."""
+    """Turns a brief (and its packet profile) into a JobPlan with an LLM."""
 
     def __init__(self, llm: LLM) -> None:
         self.llm = llm
 
     def create_plan(
         self,
-        instruction: str,
-        context: dict | None = None,
+        brief: str,
+        profile: dict | None = None,
     ) -> JobPlan:
 
-        user_content = instruction
+        user_content = (
+            "BRIEF (the task assignment):\n\n"
+            + brief.strip()
+        )
 
-        if context:
+        if profile:
             user_content += (
-                "\n\nJob context (JSON):\n"
+                "\n\nPACKET PROFILE (JSON):\n"
                 + json.dumps(
-                    context,
+                    profile,
                     ensure_ascii=False,
                     indent=2,
+                    default=str,
                 )
             )
 
@@ -157,6 +335,36 @@ class Planner:
             messages,
             temperature=0.0,
         )
+
+        data = self._parse_json(response)
+
+        return JobPlan.model_validate(self._normalize(data))
+
+    def revise(
+        self,
+        brief: str,
+        plan: JobPlan,
+        failed: PlanStep,
+        error: str,
+        profile: dict | None = None,
+    ) -> JobPlan:
+        """Ask for the whole plan again, corrected after a failed step."""
+
+        messages = [
+            {"role": "system", "content": REPAIR_PROMPT},
+            {
+                "role": "user",
+                "content": revision_request(
+                    brief,
+                    plan,
+                    failed,
+                    error,
+                    profile,
+                ),
+            },
+        ]
+
+        response = self.llm.generate(messages, temperature=0.0)
 
         data = self._parse_json(response)
 

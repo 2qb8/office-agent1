@@ -387,17 +387,26 @@ class ExplicitInstructionTests(unittest.TestCase):
             self.assertEqual(state.status.value, "success")
             self.assertTrue((job / "output" / "quick.txt").is_file())
 
-    def test_folder_with_several_documents_needs_a_choice(self):
+    def test_a_folder_of_loose_documents_is_one_packet(self):
+        # A handover is often a folder, not a tidy job: the longest document
+        # is the task, the rest is material that came with it.
         with tempfile.TemporaryDirectory() as directory:
             job = Path(directory)
 
-            for name in ("a.docx", "b.docx"):
-                document = Document()
-                document.add_paragraph("text")
-                document.save(job / name)
+            document = Document()
+            document.add_paragraph("A short note.")
+            document.save(job / "a.docx")
 
-            with self.assertRaises(RuntimeError):
-                AgentRuntime(job, build_registry())
+            document = Document()
+            document.add_paragraph("Build the pack. " * 10)
+            document.save(job / "b.docx")
+
+            runtime = AgentRuntime(job, build_registry())
+
+            self.assertEqual(
+                runtime.find_instruction().name,
+                "b.docx",
+            )
 
 
 THREE_STEPS = """\
@@ -1124,6 +1133,131 @@ class GuiWindowTests(unittest.TestCase):
                 return found
 
         return None
+
+    def _wait_for_chat(self, timeout: float = 25.0) -> bool:
+        """Wait until the pasted plan has been accepted or refused."""
+
+        worker = self.window.worker
+
+        if worker is not None:
+            worker.join(timeout)
+
+        deadline = time.time() + 5.0
+
+        while time.time() < deadline:
+            self.root.update()
+
+            if self.window.chat_error_var.get().strip():
+                return True
+
+            if self.window.plan_window is not None:
+                return True
+
+            time.sleep(0.02)
+
+        return False
+
+    def test_a_rejected_pasted_plan_keeps_the_dialog_and_its_text(self):
+        with tempfile.TemporaryDirectory() as directory:
+            job = Path(directory) / "job"
+            job.mkdir(parents=True)
+
+            instruction = write_docx(
+                job / "instruction.docx",
+                [
+                    "Please tidy the pack and write output/note.txt.",
+                ],
+            )
+
+            self.window.use_instruction(instruction)
+            self.window.show_chat_plan()
+
+            dialog = self.window.chat_window
+
+            self.assertIsNotNone(dialog, "the chatbot dialog never opened")
+            self.assertTrue(self.window.chat_request_text.strip())
+
+            pasted = '{"goal": "Bad", "steps": []}'
+
+            self.window.chat_reply.insert("1.0", pasted)
+            self.window._use_chat_plan(instruction)
+
+            self.assertTrue(
+                self._wait_for_chat(),
+                "the pasted plan was never checked",
+            )
+
+            # The reply was refused, so everything stays where it was.
+            self.assertIs(
+                self.window.chat_window,
+                dialog,
+                "the dialog closed on a rejected reply",
+            )
+            self.assertIn("cannot run", self.window.chat_error_var.get())
+            self.assertIn(
+                "no steps",
+                self.window.chat_error_var.get(),
+            )
+            self.assertIn(pasted, self.window.chat_reply.get("1.0", "end"))
+            self.assertIsNone(self.window.plan_window)
+            self.assertFalse((job / "plan.json").exists())
+
+    def test_an_accepted_pasted_plan_closes_the_dialog_and_previews_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            job = Path(directory) / "job"
+            job.mkdir(parents=True)
+
+            instruction = write_docx(
+                job / "instruction.docx",
+                [
+                    "Please write output/quick.txt.",
+                ],
+            )
+
+            reply = json.dumps(
+                {
+                    "goal": "Quick note",
+                    "steps": [
+                        {
+                            "id": "quick",
+                            "description": "Write the note",
+                            "tool": "text",
+                            "action": "write",
+                            "arguments": {
+                                "output_path": "output/quick.txt",
+                                "content": "hi",
+                            },
+                        }
+                    ],
+                }
+            )
+
+            self.window.use_instruction(instruction)
+            self.window.show_chat_plan()
+
+            self.assertIsNotNone(
+                self.window.chat_window,
+                "the chatbot dialog never opened",
+            )
+
+            self.window.chat_reply.insert("1.0", reply)
+            self.window._use_chat_plan(instruction)
+
+            self.assertTrue(
+                self._wait_for_chat(),
+                "the pasted plan was never checked",
+            )
+
+            self.assertIsNone(
+                self.window.chat_window,
+                "the dialog stayed open after the plan was accepted",
+            )
+            self.assertIsNotNone(
+                self.window.plan_window,
+                "an accepted plan was not previewed",
+            )
+            self.assertFalse((job / "output" / "quick.txt").exists())
+            self.assertTrue((job / "plan.json").is_file())
 
     def test_the_plan_is_shown_before_anything_is_written(self):
         with tempfile.TemporaryDirectory() as directory:

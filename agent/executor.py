@@ -53,18 +53,33 @@ class Executor:
         self,
         plan: JobPlan,
         job_id: str,
+        resume: JobState | None = None,
     ) -> JobState:
+        """Run a plan in order.
 
-        state = JobState(
-            job_id=job_id,
-            status=StepStatus.RUNNING,
-        )
+        ``resume`` continues an interrupted run after a repaired plan: the
+        steps that already succeeded are not run again (a second
+        append_rows would duplicate rows), and their results stay available
+        to later steps as "$step.field" references.
+        """
+
+        if resume is None:
+            state = JobState(
+                job_id=job_id,
+                status=StepStatus.RUNNING,
+            )
+            start = 0
+        else:
+            state = resume
+            state.status = StepStatus.RUNNING
+            state.current_step = None
+            start = len(state.completed_steps)
 
         self._save(state)
 
         total = len(plan.steps)
 
-        for index, step in enumerate(plan.steps):
+        for index, step in enumerate(plan.steps[start:], start=start):
 
             # Stop between steps, never inside one: a half-written workbook
             # is worse than one more step finishing.

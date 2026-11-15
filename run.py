@@ -71,6 +71,7 @@ def command_run(
 def command_init(
     job_directory: str,
     title: str | None = None,
+    spec: bool = False,
 ) -> int:
     from docx import Document
 
@@ -93,27 +94,46 @@ def command_init(
         level=1,
     )
 
-    document.add_paragraph(
-        "Edit the YAML block below to describe what this job should do, "
-        "then save the file."
-    )
+    if spec:
+        document.add_paragraph(
+            "Edit the YAML block below to describe every step by hand, "
+            "then save the file."
+        )
 
-    document.add_paragraph(
-        f"Run it with: python run.py {job_path.name}"
-    )
+        document.add_paragraph(
+            f"Run it with: python run.py {job_path.name}"
+        )
 
-    document.add_paragraph("```yaml")
+        document.add_paragraph("```yaml")
 
-    for line in SPEC_TEMPLATE.strip().splitlines():
-        document.add_paragraph(line)
+        for line in SPEC_TEMPLATE.strip().splitlines():
+            document.add_paragraph(line)
 
-    document.add_paragraph("```")
+        document.add_paragraph("```")
+    else:
+        document.add_paragraph(
+            "Describe the job below the way you would explain it to a "
+            "colleague: what the finished files should be, which inputs "
+            "to use, and the rules that matter. Replace these lines."
+        )
+
+        document.add_paragraph("What I need:")
+
+        for line in (
+            "the finished file, for example output/summary.xlsx",
+            "every other file the job should produce",
+        ):
+            document.add_paragraph(line, style="List Bullet")
+
+        document.add_paragraph(
+            f"Run it with: python run.py {job_path.name}"
+        )
 
     document.save(instruction_path)
 
     print(f"Created job: {job_path}")
     print(f"  instruction: {instruction_path}")
-    print("  inputs:      inputs/  (put source docx/xlsx/txt here)")
+    print("  inputs:      inputs/  (the rest of the packet: reference and source files)")
     print("  outputs:     output/")
     print()
     print("Next: edit the instruction, then run:")
@@ -350,7 +370,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-ai",
         dest="use_ai",
         action="store_false",
-        help="Never use AI; the instruction must contain a job spec",
+        help="Never ask the model; the brief must contain a job spec",
     )
     run_parser.set_defaults(use_ai=None)
 
@@ -360,6 +380,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     init_parser.add_argument("job_directory")
     init_parser.add_argument("--title", default=None)
+    init_parser.add_argument(
+        "--spec",
+        action="store_true",
+        help="Start from a YAML job spec instead of a prose brief",
+    )
 
     ai_parser = subparsers.add_parser(
         "ai",
@@ -438,6 +463,7 @@ def main(argv: list[str] | None = None) -> int:
         return command_init(
             arguments.job_directory,
             arguments.title,
+            arguments.spec,
         )
 
     if arguments.command == "ai":

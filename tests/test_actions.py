@@ -695,6 +695,26 @@ class FilesystemActionTests(ActionTestBase):
             "copy me\n",
         )
 
+    def test_filesystem_work_on_copy(self):
+        source = self.root / "form.xlsx"
+        source.write_bytes(b"original bytes")
+
+        destination = self.root / "out" / "form-edited.xlsx"
+
+        result = self.run_tool(
+            "filesystem",
+            "work_on_copy",
+            path=str(source),
+            output_path=str(destination),
+        )
+
+        self.assertEqual(result.data["path"], str(destination.resolve()))
+        self.assertEqual(
+            destination.read_bytes(),
+            b"original bytes",
+        )
+        self.assertEqual(source.read_bytes(), b"original bytes")
+
     def test_filesystem_list_files(self):
         (self.root / "data.xlsx").write_bytes(b"x")
         (self.root / "notes.txt").write_text("hi\n", encoding="utf-8")

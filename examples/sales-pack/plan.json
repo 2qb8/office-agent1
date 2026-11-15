@@ -1,0 +1,204 @@
+{
+  "format": 1,
+  "created": "2026-11-15T03:58:16",
+  "source": "spec",
+  "model": null,
+  "fingerprint": "91b0aaee59359e498e3baf42af8946fb37fddcb7fbc231c91124be6317c4122a",
+  "goal": "Monthly sales pack",
+  "steps": [
+    {
+      "id": "sales",
+      "description": "excel.read_table",
+      "tool": "excel",
+      "action": "read_table",
+      "arguments": {
+        "path": "inputs/sales.xlsx",
+        "sheet": "Sales"
+      },
+      "depends_on": []
+    },
+    {
+      "id": "big_deals",
+      "description": "table.filter",
+      "tool": "table",
+      "action": "filter",
+      "arguments": {
+        "headers": "$sales.headers",
+        "rows": "$sales.rows",
+        "column": "Units",
+        "op": ">=",
+        "value": 20
+      },
+      "depends_on": []
+    },
+    {
+      "id": "by_region",
+      "description": "table.aggregate",
+      "tool": "table",
+      "action": "aggregate",
+      "arguments": {
+        "headers": "$big_deals.headers",
+        "rows": "$big_deals.rows",
+        "group_by": "Region",
+        "column": "Revenue",
+        "op": "sum"
+      },
+      "depends_on": []
+    },
+    {
+      "id": "notes",
+      "description": "word.read_table",
+      "tool": "word",
+      "action": "read_table",
+      "arguments": {
+        "path": "inputs/summary.docx",
+        "table": 0
+      },
+      "depends_on": []
+    },
+    {
+      "id": "notes_xlsx",
+      "description": "excel.create_workbook",
+      "tool": "excel",
+      "action": "create_workbook",
+      "arguments": {
+        "output_path": "output/docx-table.xlsx",
+        "sheets": [
+          {
+            "name": "Summary",
+            "headers": "$notes.headers",
+            "rows": "$notes.rows"
+          }
+        ],
+        "metadata": {
+          "author": "Sales Operations",
+          "keywords": "sales, report, monthly"
+        }
+      },
+      "depends_on": []
+    },
+    {
+      "id": "notes_csv",
+      "description": "text.write",
+      "tool": "text",
+      "action": "write",
+      "arguments": {
+        "output_path": "output/docx-table.csv",
+        "headers": "$notes.headers",
+        "rows": "$notes.rows"
+      },
+      "depends_on": []
+    },
+    {
+      "id": "summary",
+      "description": "excel.create_workbook",
+      "tool": "excel",
+      "action": "create_workbook",
+      "arguments": {
+        "output_path": "output/region-summary.xlsx",
+        "sheets": [
+          {
+            "name": "Region totals",
+            "headers": "$by_region.headers",
+            "rows": "$by_region.rows"
+          }
+        ],
+        "metadata": {
+          "author": "Sales Operations",
+          "keywords": "sales, report, monthly"
+        }
+      },
+      "depends_on": []
+    },
+    {
+      "id": "report",
+      "description": "word.create_document",
+      "tool": "word",
+      "action": "create_document",
+      "arguments": {
+        "output_path": "output/sales-report.docx",
+        "elements": [
+          {
+            "type": "heading",
+            "text": "Monthly Sales Pack",
+            "level": 1
+          },
+          {
+            "type": "paragraph",
+            "text": "Deals of 20 units or more, grouped by region."
+          },
+          {
+            "type": "heading",
+            "text": "Region totals",
+            "level": 2
+          },
+          {
+            "type": "table",
+            "headers": "$by_region.headers",
+            "rows": "$by_region.rows"
+          },
+          {
+            "type": "heading",
+            "text": "Large deals",
+            "level": 2
+          },
+          {
+            "type": "table",
+            "headers": "$big_deals.headers",
+            "rows": "$big_deals.rows"
+          }
+        ],
+        "metadata": {
+          "author": "Sales Operations",
+          "keywords": "sales, report, monthly"
+        }
+      },
+      "depends_on": []
+    },
+    {
+      "id": "report_text",
+      "description": "word.export_text",
+      "tool": "word",
+      "action": "export_text",
+      "arguments": {
+        "path": "output/sales-report.docx",
+        "output_path": "output/sales-report.txt"
+      },
+      "depends_on": []
+    },
+    {
+      "id": "deals_csv",
+      "description": "text.write",
+      "tool": "text",
+      "action": "write",
+      "arguments": {
+        "output_path": "output/big-deals.csv",
+        "headers": "$big_deals.headers",
+        "rows": "$big_deals.rows"
+      },
+      "depends_on": []
+    },
+    {
+      "id": "report_preview",
+      "description": "screenshot.document",
+      "tool": "screenshot",
+      "action": "document",
+      "arguments": {
+        "path": "output/sales-report.docx",
+        "output_path": "evidence/sales-report.png"
+      },
+      "depends_on": []
+    },
+    {
+      "id": "notes_copy",
+      "description": "filesystem.copy_file",
+      "tool": "filesystem",
+      "action": "copy_file",
+      "arguments": {
+        "path": "inputs/notes.txt",
+        "destination_path": "output/notes.txt"
+      },
+      "depends_on": []
+    }
+  ]
+}
