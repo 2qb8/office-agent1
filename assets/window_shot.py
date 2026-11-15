@@ -2,15 +2,16 @@
 
 Used by the Windows build to produce the picture in the README:
 
-    python assets/window_shot.py
+    python assets/window_shot.py [output.png]
 
-It needs a desktop session, so it runs in CI rather than in a headless
-build. The window is filled with a small example so the picture shows a
-real run instead of an empty form.
+It needs a display, but not a physical one: on Linux, xvfb-run is enough,
+which is what ``scripts/gui-tests.sh --shot`` uses. The window is filled
+with a small example so the picture shows a real run, not an empty form.
 """
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 from pathlib import Path
@@ -69,9 +70,20 @@ def main() -> int:
     width = root.winfo_width()
     height = root.winfo_height()
 
-    image = ImageGrab.grab(bbox=(x, y, x + width, y + height))
+    # On Linux Pillow grabs from an X display and needs to be told which
+    # one; Xvfb's DISPLAY is just as good as a real screen.
+    xdisplay = os.environ.get("DISPLAY") if sys.platform.startswith("linux") else None
 
-    target = ROOT / "docs" / "window.png"
+    image = ImageGrab.grab(
+        bbox=(x, y, x + width, y + height),
+        xdisplay=xdisplay,
+    )
+
+    target = (
+        Path(sys.argv[1]).expanduser()
+        if len(sys.argv) > 1
+        else ROOT / "docs" / "window.png"
+    )
     target.parent.mkdir(parents=True, exist_ok=True)
     image.save(target)
 

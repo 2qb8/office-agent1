@@ -465,7 +465,43 @@ text, appends to a document, renders a screenshot and attaches it.
 The window tests need Tk and a display, so they skip on a headless
 machine. The Windows build sets `OFFICE_AGENT_REQUIRE_GUI=1`, which turns
 those skips into failures: a released executable cannot pass CI without
-the window having been built, filled in and run.
+the window having been built, filled in and run. To run them locally
+instead of by pushing, see below.
+
+### The window tests without a display
+
+Install Tk and a virtual display, then run the suite through `xvfb-run`:
+
+```bash
+sudo apt-get install -y python3-tk xvfb      # Debian/Ubuntu
+scripts/gui-tests.sh
+```
+
+The script sets `OFFICE_AGENT_REQUIRE_GUI=1` and wraps the suite in
+`xvfb-run`, so the window tests either pass or fail — they cannot quietly
+skip. It needs no display of its own, and it says exactly what to install
+when Tk or `xvfb-run` is missing.
+
+If the machine has Docker but no Tk, let the script use the container:
+
+```bash
+scripts/gui-tests.sh --docker
+```
+
+That builds `docker/gui-tests.Dockerfile` — Debian with `python3-tk`,
+`xvfb` and the requirements — and runs the same command inside it, with
+the checkout mounted so the tests see the working tree.
+
+`--shot` renders the window to a file as well, which is the same picture
+CI publishes:
+
+```bash
+scripts/gui-tests.sh --shot docs/window-local.png
+```
+
+The committed `docs/window.png` and its reference are rendered on Windows,
+so a local Linux render is for looking at, not for replacing them; Tk
+fonts differ enough between the two systems to move pixels.
 
 Action logs need a signed-in account, so a failed Windows run also commits
 `docs/test-failures.txt` to `main`: it lists the failing test names, the
