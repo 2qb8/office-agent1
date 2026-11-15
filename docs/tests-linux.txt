@@ -1,7 +1,7 @@
 Office Agent test summary — Linux
-Run:     https://github.com/2qb8/office-agent1/actions/runs/43683356525
-Commit:  57f33fa (2026-11-15T05:59Z)
-Python:  3.11.2, Linux 7.0.0-1016-aws
+Run:     https://github.com/2qb8/office-agent1/actions/runs/43683926548
+Commit:  47356eb (2026-11-15T06:07Z)
+Python:  3.11.2, Linux 7.0.0-1019-azure
 
 Suite:   211 tests in 7.4s
 Pass:    211
