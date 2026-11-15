@@ -6,8 +6,11 @@
 The render step is allowed to fail: a PNG is not worth failing a release
 for. It must not be silent either — a run that says PASS while the window
 could not be drawn is the kind of green tick this project keeps trying to
-avoid. The run log needs an account, so the plain fact goes into a committed
-file that anyone can read.
+avoid. Nor may it guess: a step that was skipped because the tests failed
+never ran, so the line says that instead of blaming the picture.
+
+The run log needs an account, so the plain fact goes into a committed file
+that anyone can read.
 """
 
 from __future__ import annotations
@@ -41,27 +44,43 @@ def build_line(
 ) -> str:
     where = f" at {commit}" if commit else ""
 
-    if not image.is_file():
+    if image.is_file():
+        size = png_size(image)
+
+        if size is None:
+            return (
+                f"Window render (Linux): wrote {image.name}, but it is not a "
+                f"readable PNG; the render step ended as {outcome}{where}.\n"
+            )
+
+        width, height = size
+
         return (
-            f"Window render (Linux): produced nothing; the render step ended "
-            f"as {outcome}{where}. The window tests are unaffected — this "
-            f"only means the picture could not be drawn.\n"
+            f"Window render (Linux): produced {image.name}, {width}x{height}, "
+            f"{image.stat().st_size} bytes; the render step ended as "
+            f"{outcome}{where}.\n"
         )
 
-    size = png_size(image)
-
-    if size is None:
+    # A skipped render means the step never started, which happens when the
+    # tests before it failed. That is not the picture's fault, and saying the
+    # tests are unaffected would be a plain lie.
+    if outcome in {"skipped", "cancelled"}:
         return (
-            f"Window render (Linux): wrote {image.name}, but it is not a "
-            f"readable PNG; the render step ended as {outcome}{where}.\n"
+            f"Window render (Linux): not attempted — the render step ended as "
+            f"{outcome}{where}, so the run did not get that far. Nothing was "
+            f"drawn and nothing is claimed about the picture.\n"
         )
 
-    width, height = size
+    if outcome == "success":
+        return (
+            "Window render (Linux): the render step ended as success but "
+            f"wrote no PNG{where}. Nothing was drawn.\n"
+        )
 
     return (
-        f"Window render (Linux): produced {image.name}, {width}x{height}, "
-        f"{image.stat().st_size} bytes; the render step ended as "
-        f"{outcome}{where}.\n"
+        f"Window render (Linux): produced nothing; the render step ran and "
+        f"ended as {outcome}{where}. The window tests are unaffected — only "
+        f"the picture is missing.\n"
     )
 
 
