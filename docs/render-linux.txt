@@ -1,1 +1,1 @@
-Window render (Linux): produced window-linux.png, 980x708, 66178 bytes; the render step ended as success at 47356eb.
+Window render (Linux): produced window-linux.png, 980x708, 66178 bytes; the render step ended as success at 0fdc239.
