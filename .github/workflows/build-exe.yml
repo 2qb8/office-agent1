@@ -78,11 +78,11 @@ jobs:
             echo "Suite result:"
             grep -E "^(Ran |FAILED|OK)" tests.log || true
             echo
-            echo "Last test lines before the end:"
-            grep -E "(^test_|^FAIL:|^ERROR:|^AssertionError|^Ran )" tests.log | tail -n 25 || true
+            echo "Tracebacks:"
+            grep -A 18 -E "^(FAIL|ERROR): " tests.log | tail -n 220 || true
             echo
             echo "Last lines of output:"
-            tail -n 40 tests.log || true
+            tail -n 120 tests.log || true
           } > docs/test-failures.txt
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

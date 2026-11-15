@@ -132,9 +132,18 @@ class ExcelTool(Tool):
 
         if sheet:
             if sheet not in workbook.sheetnames:
+                available = list(workbook.sheetnames)
+
+                # Close before raising: on Windows a leaked handle keeps the
+                # file locked, and the rest of the run cannot touch it.
+                try:
+                    workbook.close()
+                except Exception:
+                    pass
+
                 raise ValueError(
                     f"Worksheet not found: {sheet}. "
-                    f"Available: {workbook.sheetnames}"
+                    f"Available: {available}"
                 )
 
             return workbook[sheet]
@@ -223,17 +232,20 @@ class ExcelTool(Tool):
                 data_only=bool(arguments.get("data_only", False)),
             )
 
-            worksheet = self._open_worksheet(workbook, arguments)
+            # Closed in a finally: a read that fails half way through must
+            # not leave the workbook open for the rest of the run.
+            try:
+                worksheet = self._open_worksheet(workbook, arguments)
 
-            matrix: list[list[Any]] = [
-                list(row)
-                for row in worksheet.iter_rows(values_only=True)
-            ]
+                matrix: list[list[Any]] = [
+                    list(row)
+                    for row in worksheet.iter_rows(values_only=True)
+                ]
 
-            sheet_name = worksheet.title
-            sheet_names = list(workbook.sheetnames)
-
-            workbook.close()
+                sheet_name = worksheet.title
+                sheet_names = list(workbook.sheetnames)
+            finally:
+                workbook.close()
 
             headers, rows = shape_table(
                 matrix,

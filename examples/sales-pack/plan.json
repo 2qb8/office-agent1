@@ -1,10 +1,11 @@
 {
   "format": 1,
-  "created": "2026-11-15T03:58:16",
+  "created": "2026-11-15T04:22:54",
   "source": "spec",
   "model": null,
-  "fingerprint": "91b0aaee59359e498e3baf42af8946fb37fddcb7fbc231c91124be6317c4122a",
+  "fingerprint": "6bee694c5a56d1c0fbedad7a67a8dd75060ec3092a989d4999383e13941d0753",
   "goal": "Monthly sales pack",
+  "revisions": [],
   "steps": [
     {
       "id": "sales",

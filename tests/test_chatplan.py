@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -123,7 +124,13 @@ class RequestTests(ChatPlanTestCase):
         path, text = desktop.plan_request(self.instruction)
 
         self.assertEqual(path.name, chatplan.REQUEST_NAME)
-        self.assertEqual(path.parent, self.job)
+
+        # Windows hands out 8.3 short temp paths; compare what they resolve
+        # to, not how they are spelled.
+        self.assertEqual(
+            os.path.realpath(path.parent),
+            os.path.realpath(self.job),
+        )
         self.assertEqual(
             path.read_text(encoding="utf-8"),
             text,

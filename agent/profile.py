@@ -171,21 +171,41 @@ def packet_files(
 
 
 def fingerprint(profile: dict[str, Any]) -> str:
-    """A stable hash of the brief, every packet file's bytes and the profile.
+    """A stable hash of the brief, every packet file's content and the profile.
 
     The digests inside the profile are what make this honest: two packets
     whose capped descriptions look identical but whose files differ at the
     ninetieth row still hash differently.
+
+    File sizes are left out, and text digests are computed on text with
+    normalized line endings, so the same packet checked out on Windows and
+    on Linux produces the same fingerprint.
     """
 
     payload = json.dumps(
-        profile,
+        _without_sizes(profile),
         sort_keys=True,
         ensure_ascii=False,
         default=str,
     )
 
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _without_sizes(value: Any) -> Any:
+    """Drop byte counts: a CRLF checkout is not a different packet."""
+
+    if isinstance(value, dict):
+        return {
+            key: _without_sizes(item)
+            for key, item in value.items()
+            if key != "bytes"
+        }
+
+    if isinstance(value, list):
+        return [_without_sizes(item) for item in value]
+
+    return value
 
 
 # ----------------------------------------------------------------------
@@ -448,7 +468,18 @@ def _size(path: Path) -> int:
 
 
 def _digest(path: Path) -> str:
-    """SHA-256 of the whole file, in chunks so a big workbook is fine."""
+    """SHA-256 of the file's content.
+
+    Text files are digested with normalized line endings, so a packet that
+    was checked out with CRLF is the same packet as one with LF — otherwise
+    a saved plan would look stale on Windows for no reason at all. Binary
+    files (Word, Excel) are hashed as they are.
+    """
+
+    if path.suffix.lower() in TEXT_SUFFIXES | TABLE_SUFFIXES:
+        return hashlib.sha256(
+            _normalized_text(path).encode("utf-8")
+        ).hexdigest()
 
     digest = hashlib.sha256()
 
@@ -463,3 +494,12 @@ def _digest(path: Path) -> str:
         return ""
 
     return digest.hexdigest()
+
+
+def _normalized_text(path: Path) -> str:
+    try:
+        text = path.read_text(encoding="utf-8-sig", errors="replace")
+    except OSError:
+        return ""
+
+    return text.replace("\r\n", "\n").replace("\r", "\n")
