@@ -515,6 +515,7 @@ by every run — red or green:
 | --- | --- |
 | `docs/tests-windows.txt` | the Windows job, after the suite |
 | `docs/tests-linux.txt` | the Linux container job, after the suite |
+| `docs/render-linux.txt` | the Linux job, after the optional window render |
 
 Each shows the totals, the skip reasons, any failing test names, and how many
 of the 16 window tests actually ran — the line that says whether the GUI was
@@ -524,6 +525,11 @@ which runs the same suite and can be used locally:
 ```bash
 .venv/bin/python scripts/test_summary.py --label Local --out /tmp/summary.txt
 ```
+
+The Linux job also draws the window as a picture, and a picture is not worth
+failing a run over, so that step is allowed to fail. It cannot be silent:
+`docs/render-linux.txt` says in one line whether the PNG was produced (with
+its size) or "produced nothing", and how the step ended.
 
 `tests/test_actions.py` has one test per advertised tool action, plus a
 meta-test that fails when an action has no test or is not wired into the

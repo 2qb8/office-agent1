@@ -12,9 +12,10 @@ on:
 # Building it here and running the suite through scripts/gui-tests.sh --docker
 # proves that headless setup on every push instead of only describing it.
 #
-# Run logs need a signed-in account, so a failure leaves the same kind of
-# report the Windows job writes: docs/linux-tests-failures.txt, removed by
-# the next green run.
+# Run logs need a signed-in account, so the numbers and the render outcome
+# are committed instead: docs/tests-linux.txt and docs/render-linux.txt. A
+# failing run also leaves docs/linux-tests-failures.txt, removed by the next
+# green one.
 
 jobs:
   window-tests:
@@ -41,33 +42,12 @@ jobs:
           set -o pipefail
           scripts/gui-tests.sh --docker 2>&1 | tee linux-tests.log
 
-      # The run log needs an account; this file does not. It is the record
-      # of how many tests ran and that the Tk window was really built.
-      - name: Publish the test summary
-        if: always() && github.ref == 'refs/heads/main'
-        shell: bash
-        run: |
-          [ -f docs/tests-linux.txt ] || exit 0
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f docs/tests-linux.txt
-          if git diff --cached --quiet; then
-            echo "Summary unchanged"
-            exit 0
-          fi
-          git commit -m "Linux test summary from ${GITHUB_SHA:0:7} [skip ci]"
-          for attempt in 1 2 3; do
-            if git push origin HEAD:main; then
-              exit 0
-            fi
-            git pull --rebase --autostash origin main || true
-            sleep 3
-          done
-          echo "Could not push the summary; the next run rewrites it."
-
       # Not part of the gate: a render only proves Pillow can grab from the
       # virtual display, which is about the screenshot tooling, not the tests.
+      # Its outcome is recorded below, so "allowed to fail" does not mean
+      # "allowed to be invisible".
       - name: Render the window to a PNG
+        id: render
         if: success()
         continue-on-error: true
         env:
@@ -75,7 +55,43 @@ jobs:
           GUI_TESTS_SKIP_SUITE: "1"
         run: |
           mkdir -p docs
+          rm -f docs/window-linux.png
           scripts/gui-tests.sh --docker --shot docs/window-linux.png 2>&1 | tee -a linux-tests.log
+
+      - name: Record the render outcome
+        if: always()
+        shell: bash
+        run: |
+          python3 scripts/render_report.py docs/window-linux.png \
+            --out docs/render-linux.txt \
+            --outcome "${{ steps.render.outcome }}" \
+            --commit "${GITHUB_SHA:0:7}"
+
+      # The run log needs an account; these files do not. Rewritten by every
+      # run, red or green, so the numbers and the state of the render can be
+      # read without signing in.
+      - name: Publish the summaries
+        if: always() && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          [ -f docs/tests-linux.txt ] || exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f docs/tests-linux.txt
+          [ -f docs/render-linux.txt ] && git add -f docs/render-linux.txt
+          if git diff --cached --quiet; then
+            echo "Summaries unchanged"
+            exit 0
+          fi
+          git commit -m "Linux test and render summary from ${GITHUB_SHA:0:7} [skip ci]"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            git pull --rebase --autostash origin main || true
+            sleep 3
+          done
+          echo "Could not push the summaries; the next run rewrites them."
 
       - name: Keep the render and the log
         if: always()
@@ -102,6 +118,7 @@ jobs:
             echo
             echo "Step outcomes:"
             echo "  tests=${{ steps.tests.outcome }}"
+            echo "  render=${{ steps.render.outcome }}"
             echo
             echo "Output (tail):"
             tail -n 200 linux-tests.log || true
