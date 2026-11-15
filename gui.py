@@ -545,17 +545,17 @@ class OfficeAgentWindow:
             command=self.copy_details,
             state="disabled",
         )
-        self.copy_button.grid(row=0, column=3, sticky="e", padx=(16, 0))
+        self.copy_button.grid(row=0, column=3, sticky="e", padx=(10, 0))
 
         self.log_button = ttk.Button(footer, command=self.open_run_log)
-        self.log_button.grid(row=0, column=4, sticky="e", padx=(8, 0))
+        self.log_button.grid(row=0, column=4, sticky="e", padx=(6, 0))
 
         # No key needed: plan in a web chat and paste the reply back.
         self.chat_button = ttk.Button(
             footer,
             command=self.show_chat_plan,
         )
-        self.chat_button.grid(row=0, column=5, sticky="e", padx=(8, 0))
+        self.chat_button.grid(row=0, column=5, sticky="e", padx=(6, 0))
 
         # Determinate: one step of the plan is one step of the bar.
         self.progress = ttk.Progressbar(

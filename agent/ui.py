@@ -48,7 +48,7 @@ STRINGS: dict[str, dict[str, str]] = {
         ),
         "no_spec": (
             "This brief has no 'steps' block, and no AI provider is "
-            "configured. Press Plan in a chatbot to plan it in a web chat, "
+            "configured. Press Plan in a chatbot to plan it in a web chat,"
             "or fill in the AI planner section."
         ),
         "done": "Done — {count} file(s) created.",
@@ -97,7 +97,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "example": "Try an example",
         "example_copied": "Example copied to {path} — press Run.",
         "example_failed": "Could not copy the example: {error}",
-        "chat": "Plan in a chatbot…",
+        "chat": "Plan in a chatbot",
         "chat_title": "Plan in a chatbot",
         "chat_intro": (
             "Copy the request into ChatGPT, Claude, Gemini or any chat "
@@ -185,7 +185,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "example": "Попробовать пример",
         "example_copied": "Пример скопирован в {path} — нажмите «Запустить».",
         "example_failed": "Не удалось скопировать пример: {error}",
-        "chat": "План в чатботе…",
+        "chat": "План в чате",
         "chat_title": "План в чатботе",
         "chat_intro": (
             "Скопируйте запрос в ChatGPT, Claude, Gemini или любой другой "
