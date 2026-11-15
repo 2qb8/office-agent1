@@ -8,7 +8,8 @@
 #   scripts/gui-tests.sh --shot out.png   also render the window to a file
 #
 # Set GUI_TESTS_PYTHON to choose the interpreter (the container points it at
-# its own venv) and GUI_TESTS_SKIP_SUITE=1 to render only the screenshot.
+# its own venv), GUI_TESTS_SKIP_SUITE=1 to render only the screenshot, and
+# GUI_TESTS_SUMMARY=docs/tests-linux.txt to leave a summary file behind.
 #
 # Without a display the window tests skip, which is how GUI defects reached
 # CI before anyone saw them on their own machine. This script sets
@@ -90,9 +91,20 @@ run_local() {
     if [ "${GUI_TESTS_SKIP_SUITE:-}" = "1" ] && [ -n "$shot" ]; then
         :
     else
+        local summary=()
+
+        if [ -n "${GUI_TESTS_SUMMARY:-}" ]; then
+            summary=(--out "$GUI_TESTS_SUMMARY")
+        fi
+
+        # test_summary.py runs the same suite with the same verbose output,
+        # and leaves a file that says how much ran and whether the window
+        # tests were exercised — the run log itself needs an account.
         OFFICE_AGENT_REQUIRE_GUI=1 \
             ${runner[@]+"${runner[@]}"} \
-            "$python" -m unittest discover -s tests -v
+            "$python" scripts/test_summary.py \
+                --label "${GUI_TESTS_LABEL:-Linux}" \
+                ${summary[@]+"${summary[@]}"}
     fi
 
     if [ -n "$shot" ]; then
@@ -134,6 +146,8 @@ run_docker() {
         -e HOME=/tmp \
         -e GUI_TESTS_PYTHON=/opt/venv/bin/python \
         -e GUI_TESTS_SKIP_SUITE \
+        -e GUI_TESTS_SUMMARY \
+        -e GUI_TESTS_LABEL \
         "$image" \
         bash scripts/gui-tests.sh --no-docker ${pass[@]+"${pass[@]}"}
 }

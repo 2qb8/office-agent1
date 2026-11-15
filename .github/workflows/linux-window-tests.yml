@@ -34,9 +34,36 @@ jobs:
       - name: Run the window tests in the container
         id: tests
         shell: bash
+        env:
+          GUI_TESTS_LABEL: Linux
+          GUI_TESTS_SUMMARY: docs/tests-linux.txt
         run: |
           set -o pipefail
           scripts/gui-tests.sh --docker 2>&1 | tee linux-tests.log
+
+      # The run log needs an account; this file does not. It is the record
+      # of how many tests ran and that the Tk window was really built.
+      - name: Publish the test summary
+        if: always() && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          [ -f docs/tests-linux.txt ] || exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f docs/tests-linux.txt
+          if git diff --cached --quiet; then
+            echo "Summary unchanged"
+            exit 0
+          fi
+          git commit -m "Linux test summary from ${GITHUB_SHA:0:7} [skip ci]"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            git pull --rebase --autostash origin main || true
+            sleep 3
+          done
+          echo "Could not push the summary; the next run rewrites it."
 
       # Not part of the gate: a render only proves Pillow can grab from the
       # virtual display, which is about the screenshot tooling, not the tests.

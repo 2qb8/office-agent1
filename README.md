@@ -508,6 +508,23 @@ Action logs need a signed-in account, so a failed Windows run also commits
 suite result and the run URL, and the next successful run deletes it. If
 that file is absent, the last build passed.
 
+What ran, in numbers, is in two files that need no account and are rewritten
+by every run — red or green:
+
+| File | Written by |
+| --- | --- |
+| `docs/tests-windows.txt` | the Windows job, after the suite |
+| `docs/tests-linux.txt` | the Linux container job, after the suite |
+
+Each shows the totals, the skip reasons, any failing test names, and how many
+of the 16 window tests actually ran — the line that says whether the GUI was
+really built or quietly skipped. They come from `scripts/test_summary.py`,
+which runs the same suite and can be used locally:
+
+```bash
+.venv/bin/python scripts/test_summary.py --label Local --out /tmp/summary.txt
+```
+
 `tests/test_actions.py` has one test per advertised tool action, plus a
 meta-test that fails when an action has no test or is not wired into the
 tool's `run()`. `tests/test_ui.py` covers the desktop app's translations,

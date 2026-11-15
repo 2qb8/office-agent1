@@ -43,7 +43,33 @@ jobs:
           OFFICE_AGENT_REQUIRE_GUI: "1"
         run: |
           set -o pipefail
-          python -m unittest discover -s tests -v 2>&1 | tee tests.log
+          python scripts/test_summary.py --label Windows \
+            --out docs/tests-windows.txt 2>&1 | tee tests.log
+
+      # The run log needs an account; this file does not. It says how many
+      # tests ran, what was skipped and why, and whether the window tests
+      # were really exercised. Rewritten by every run, red or green.
+      - name: Publish the test summary
+        if: always() && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          [ -f docs/tests-windows.txt ] || exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f docs/tests-windows.txt
+          if git diff --cached --quiet; then
+            echo "Summary unchanged"
+            exit 0
+          fi
+          git commit -m "Test summary from ${GITHUB_SHA:0:7} [skip ci]"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            git pull --rebase --autostash origin main || true
+            sleep 3
+          done
+          echo "Could not push the summary; the next run rewrites it."
 
       - name: Show test failures
         if: failure()
