@@ -351,10 +351,17 @@ class AgentRuntime:
 
             totals = self._profile["totals"]
 
+            # Named, not just counted: a file that ended up in the packet
+            # by accident is otherwise invisible until a plan looks stale.
+            names = ", ".join(
+                file["path"] for file in self._profile["files"]
+            )
+
             self.logger.log(
                 "FILES",
                 f"Profiled {totals['files']} packet files "
-                f"({totals['characters']} characters)",
+                f"({totals['characters']} characters)"
+                + (f": {names}" if names else ""),
             )
 
         return self._profile

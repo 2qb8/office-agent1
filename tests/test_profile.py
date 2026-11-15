@@ -221,12 +221,24 @@ class ProfileTests(PacketTestCase):
         )
 
     def test_the_jobs_own_files_are_not_packet_content(self):
-        for name in ("run.log", "report.json", "state.json", "plan.json"):
+        artifacts = (
+            "run.log",
+            "report.json",
+            "state.json",
+            "plan.json",
+            "plan-request.md",
+            "self-test.txt",
+            # Written before planning starts, so it sits in the folder while
+            # the packet is profiled.
+            "self-test-crash.txt",
+        )
+
+        for name in artifacts:
             (self.job / name).write_text("{}", encoding="utf-8")
 
         names = [file["name"] for file in self.profile()["files"]]
 
-        for name in ("run.log", "report.json", "state.json", "plan.json"):
+        for name in artifacts:
             self.assertNotIn(name, names)
 
     def test_a_large_text_file_is_capped(self):

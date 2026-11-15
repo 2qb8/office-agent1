@@ -55,6 +55,9 @@ JOB_FILES = {
     "plan.json",
     "plan-request.md",
     "self-test.txt",
+    # Written by --self-test before it plans anything, so it is there while
+    # the packet is profiled: a crash note is not packet content.
+    "self-test-crash.txt",
     "instruction_template.docx",
 }
 
