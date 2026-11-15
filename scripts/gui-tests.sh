@@ -138,7 +138,9 @@ run_docker() {
     docker build -f docker/gui-tests.Dockerfile -t "$image" .
 
     # The image carries its own interpreter with Tk and the requirements;
-    # the checkout is mounted so the tests see the working tree.
+    # the checkout is mounted so the tests see the working tree. The GITHUB_*
+    # variables travel too, so a summary written inside the container can
+    # name the run it belongs to instead of saying "local run".
     docker run --rm \
         -v "$root:/app" \
         -w /app \
@@ -148,6 +150,10 @@ run_docker() {
         -e GUI_TESTS_SKIP_SUITE \
         -e GUI_TESTS_SUMMARY \
         -e GUI_TESTS_LABEL \
+        -e GITHUB_SHA \
+        -e GITHUB_RUN_ID \
+        -e GITHUB_SERVER_URL \
+        -e GITHUB_REPOSITORY \
         "$image" \
         bash scripts/gui-tests.sh --no-docker ${pass[@]+"${pass[@]}"}
 }
