@@ -6,8 +6,10 @@ from typing import Any
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill
 
+from agent.deterministic import save_workbook
 from agent.metadata import (
     apply_to_workbook,
+    pin_default_dates,
     read_workbook_metadata,
     resolve as resolve_metadata,
 )
@@ -367,12 +369,14 @@ class ExcelTool(Tool):
                     }
                 )
 
+            pin_default_dates(workbook)
+
             apply_to_workbook(
                 workbook,
                 resolve_metadata(arguments.get("metadata")),
             )
 
-            workbook.save(output_path)
+            save_workbook(workbook, output_path)
             workbook.close()
 
         except Exception as exc:
@@ -645,7 +649,7 @@ class ExcelTool(Tool):
 
             workbook[sheet][cell] = arguments.get("value")
 
-            workbook.save(path)
+            save_workbook(workbook, path)
             workbook.close()
 
         except Exception as exc:
@@ -726,7 +730,7 @@ class ExcelTool(Tool):
                         value=value,
                     )
 
-            workbook.save(path)
+            save_workbook(workbook, path)
             workbook.close()
 
         except Exception as exc:
@@ -778,7 +782,7 @@ class ExcelTool(Tool):
                     cell.font = Font(bold=True)
                     cell.fill = HEADER_FILL
 
-            workbook.save(path)
+            save_workbook(workbook, path)
             workbook.close()
 
         except Exception as exc:
@@ -849,7 +853,7 @@ class ExcelTool(Tool):
                         value=value,
                     )
 
-            workbook.save(path)
+            save_workbook(workbook, path)
             workbook.close()
 
         except Exception as exc:
@@ -912,7 +916,7 @@ class ExcelTool(Tool):
                 top_left = cell_range.split(":")[0]
                 worksheet[top_left] = arguments.get("value")
 
-            workbook.save(path)
+            save_workbook(workbook, path)
             workbook.close()
 
         except Exception as exc:
@@ -963,7 +967,7 @@ class ExcelTool(Tool):
             for worksheet in targets:
                 self._autosize(worksheet)
 
-            workbook.save(path)
+            save_workbook(workbook, path)
             workbook.close()
 
         except Exception as exc:
@@ -1042,7 +1046,7 @@ class ExcelTool(Tool):
 
             worksheet.add_image(drawing, cell)
 
-            workbook.save(path)
+            save_workbook(workbook, path)
             workbook.close()
 
         except Exception as exc:
@@ -1096,7 +1100,7 @@ class ExcelTool(Tool):
 
             apply_to_workbook(workbook, values)
 
-            workbook.save(path)
+            save_workbook(workbook, path)
 
             updated = read_workbook_metadata(workbook)
 

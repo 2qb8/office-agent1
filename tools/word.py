@@ -7,8 +7,10 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches
 
+from agent.deterministic import save_document
 from agent.metadata import (
     apply_to_document,
+    pin_default_dates,
     read_document_metadata,
     resolve as resolve_metadata,
 )
@@ -113,6 +115,8 @@ class WordTool(Tool):
             for element in elements:
                 self._add_element(document, element)
 
+            pin_default_dates(document)
+
             apply_to_document(
                 document,
                 resolve_metadata(arguments.get("metadata")),
@@ -123,7 +127,7 @@ class WordTool(Tool):
                 exist_ok=True,
             )
 
-            document.save(output_path)
+            save_document(document, output_path)
 
         except Exception as exc:
             return ToolResult(
@@ -206,7 +210,7 @@ class WordTool(Tool):
                 exist_ok=True,
             )
 
-            document.save(output_path)
+            save_document(document, output_path)
 
         except Exception as exc:
             return ToolResult(
@@ -707,7 +711,7 @@ class WordTool(Tool):
                 exist_ok=True,
             )
 
-            document.save(output_path)
+            save_document(document, output_path)
 
         except Exception as exc:
             return ToolResult(
@@ -790,7 +794,7 @@ class WordTool(Tool):
                 exist_ok=True,
             )
 
-            document.save(output_path)
+            save_document(document, output_path)
 
             updated = read_document_metadata(document)
 
@@ -883,7 +887,7 @@ class WordTool(Tool):
                 exist_ok=True,
             )
 
-            document.save(output_path)
+            save_document(document, output_path)
 
         except Exception as exc:
             return ToolResult(

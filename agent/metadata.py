@@ -23,6 +23,9 @@ TEXT_FIELDS = tuple(DEFAULT_METADATA)
 
 DATE_FIELDS = ("created", "modified")
 
+# The clock every generated document starts from; see agent.deterministic.
+STABLE_DATETIME = datetime(2000, 1, 1, 0, 0, 0)
+
 SUPPORTED_FIELDS = TEXT_FIELDS + DATE_FIELDS
 
 AUTHOR_ENV = "OFFICE_AGENT_AUTHOR"
@@ -111,6 +114,27 @@ def parse_datetime(value: Any, name: str) -> datetime | None:
             f"'{name}' must be an ISO 8601 date, "
             "for example 2026-01-31T09:00:00"
         ) from None
+
+
+def pin_default_dates(target) -> None:
+    """Give a freshly created document or workbook a fixed clock.
+
+    openpyxl stamps a new workbook with the current time, which alone is
+    enough to make two identical runs produce different bytes. Pinning the
+    dates here — before any metadata from the plan is applied — keeps plans
+    that do set ``created`` or ``modified`` in charge of their own values.
+    """
+
+    properties = getattr(target, "core_properties", None)
+
+    if properties is None:
+        properties = getattr(target, "properties", None)
+
+    if properties is None:
+        return
+
+    for field in DATE_FIELDS:
+        setattr(properties, field, STABLE_DATETIME)
 
 
 def apply_to_document(document, metadata: dict[str, Any]) -> None:
