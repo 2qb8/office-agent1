@@ -1,0 +1,30 @@
+Only present while the last Windows run failed; CI removes it
+once the run is green again. No sign-in needed to read this.
+
+Run:    https://github.com/2qb8/office-agent1/actions/runs/43676187590
+Commit: 702a8776748295c3a67de1f1f4ec9164247e1783
+
+Steps:
+  install=success
+  tests=failure
+  window=skipped
+  screenshot=skipped
+  golden=skipped
+  build=skipped
+  verify=skipped
+  cli=skipped
+  selftest=skipped
+  upload=skipped
+  screenshot-publish=skipped
+  sign=skipped
+  release=skipped
+
+dist/:
+  (no dist)
+
+Self-test report:
+  (none)
+  (no crash file)
+
+Self-test CI log:
+  (none)
