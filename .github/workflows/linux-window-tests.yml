@@ -1,0 +1,98 @@
+name: linux-window-tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+
+# The window tests need Tk and a display. The Windows runner has both; a
+# Linux runner has neither, which is why docker/gui-tests.Dockerfile exists.
+# Building it here and running the suite through scripts/gui-tests.sh --docker
+# proves that headless setup on every push instead of only describing it.
+#
+# Run logs need a signed-in account, so a failure leaves the same kind of
+# report the Windows job writes: docs/linux-tests-failures.txt, removed by
+# the next green run.
+
+jobs:
+  window-tests:
+    runs-on: ubuntu-latest
+    # Bot commits (screenshot, failure report) must not start another run.
+    if: github.actor != 'github-actions[bot]'
+    permissions:
+      contents: write
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The script builds the image, mounts this checkout into it and runs
+      # `scripts/gui-tests.sh --no-docker` inside, so the tests see the
+      # working tree and a real Xvfb display.
+      - name: Run the window tests in the container
+        id: tests
+        shell: bash
+        run: |
+          set -o pipefail
+          scripts/gui-tests.sh --docker 2>&1 | tee linux-tests.log
+
+      # Not part of the gate: a render only proves Pillow can grab from the
+      # virtual display, which is about the screenshot tooling, not the tests.
+      - name: Render the window to a PNG
+        if: success()
+        continue-on-error: true
+        env:
+          # The suite already ran in the step above; only draw the window.
+          GUI_TESTS_SKIP_SUITE: "1"
+        run: |
+          mkdir -p docs
+          scripts/gui-tests.sh --docker --shot docs/window-linux.png 2>&1 | tee -a linux-tests.log
+
+      - name: Keep the render and the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: window-linux
+          path: |
+            docs/window-linux.png
+            linux-tests.log
+          if-no-files-found: ignore
+
+      - name: Record the failure in the repository
+        if: failure() && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          mkdir -p docs
+          [ -f linux-tests.log ] || touch linux-tests.log
+          {
+            echo "Only present while the last Linux run failed; CI removes it"
+            echo "once the run is green again. No sign-in needed to read this."
+            echo
+            echo "Run:    ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "Commit: ${GITHUB_SHA}"
+            echo
+            echo "Step outcomes:"
+            echo "  tests=${{ steps.tests.outcome }}"
+            echo
+            echo "Output (tail):"
+            tail -n 200 linux-tests.log || true
+          } > docs/linux-tests-failures.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f docs/linux-tests-failures.txt
+          git commit -m "Record the failing Linux window tests from ${GITHUB_SHA:0:7} [skip ci]" || exit 0
+          git push origin HEAD:main || true
+
+      - name: Clear the failure report
+        if: success()
+        shell: bash
+        run: |
+          if [ -f docs/linux-tests-failures.txt ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git rm -q -f docs/linux-tests-failures.txt
+            git commit -m "Linux window tests pass again on ${GITHUB_SHA:0:7} [skip ci]"
+            git push origin HEAD:main || true
+          fi

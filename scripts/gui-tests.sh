@@ -7,6 +7,9 @@
 #   scripts/gui-tests.sh --no-docker      never the container (used inside it)
 #   scripts/gui-tests.sh --shot out.png   also render the window to a file
 #
+# Set GUI_TESTS_PYTHON to choose the interpreter (the container points it at
+# its own venv) and GUI_TESTS_SKIP_SUITE=1 to render only the screenshot.
+#
 # Without a display the window tests skip, which is how GUI defects reached
 # CI before anyone saw them on their own machine. This script sets
 # OFFICE_AGENT_REQUIRE_GUI=1, so those skips become failures: no Tk, no
@@ -82,9 +85,15 @@ run_local() {
         runner=(xvfb-run -a -s "-screen 0 $screen")
     fi
 
-    OFFICE_AGENT_REQUIRE_GUI=1 \
-        ${runner[@]+"${runner[@]}"} \
-        "$python" -m unittest discover -s tests -v
+    # GUI_TESTS_SKIP_SUITE=1 runs only the screenshot, for a caller that has
+    # already run the suite (Linux CI renders the picture afterwards).
+    if [ "${GUI_TESTS_SKIP_SUITE:-}" = "1" ] && [ -n "$shot" ]; then
+        :
+    else
+        OFFICE_AGENT_REQUIRE_GUI=1 \
+            ${runner[@]+"${runner[@]}"} \
+            "$python" -m unittest discover -s tests -v
+    fi
 
     if [ -n "$shot" ]; then
         OFFICE_AGENT_REQUIRE_GUI=1 \
@@ -124,6 +133,7 @@ run_docker() {
         -u "$(id -u):$(id -g)" \
         -e HOME=/tmp \
         -e GUI_TESTS_PYTHON=/opt/venv/bin/python \
+        -e GUI_TESTS_SKIP_SUITE \
         "$image" \
         bash scripts/gui-tests.sh --no-docker ${pass[@]+"${pass[@]}"}
 }
