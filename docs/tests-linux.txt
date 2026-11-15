@@ -1,0 +1,15 @@
+Office Agent test summary — Linux
+Run:     local run
+Commit:  uncommitted (2026-11-15T05:46Z)
+Python:  3.11.2, Linux 7.0.0-1019-azure
+
+Suite:   209 tests in 8.6s
+Pass:    209
+Skip:    0
+Fail:    0
+Error:   0
+
+Window tests (Tk): 16 of 16 ran, 0 skipped
+Skipped: none
+
+Result:  PASS
