@@ -200,7 +200,22 @@ def unknown_actions(registry, plan) -> list[str]:
     return missing
 
 
-def run_case(name: str, build, root: Path) -> dict:
+def outputs(folder: Path) -> list[str]:
+    """Files the run actually produced, ignoring empty ones."""
+
+    directory = folder / "output"
+
+    if not directory.is_dir():
+        return []
+
+    return sorted(
+        path.name
+        for path in directory.iterdir()
+        if path.is_file() and path.stat().st_size > 0
+    )
+
+
+def run_case(name: str, build, root: Path, repair: bool = False) -> dict:
     folder = root / name.split(" ")[0]
 
     folder.mkdir(parents=True, exist_ok=True)
@@ -220,73 +235,82 @@ def run_case(name: str, build, root: Path) -> dict:
         return {
             "name": name,
             "valid": False,
-            "ran": False,
+            "correct": False,
+            "repairs": 0,
+            "plan_seconds": time.monotonic() - started,
             "seconds": time.monotonic() - started,
             "steps": [],
+            "outputs": [],
             "note": f"{type(error).__name__}: {detail}",
         }
 
-    elapsed = time.monotonic() - started
+    plan_seconds = time.monotonic() - started
     steps = [f"{step.tool}.{step.action}" for step in plan.steps]
     missing = unknown_actions(registry, plan)
 
-    if missing:
-        return {
-            "name": name,
-            "valid": True,
-            "ran": False,
-            "seconds": elapsed,
-            "steps": steps,
-            "note": "no such action: " + ", ".join(missing),
-        }
-
     try:
-        state = runtime.execute_plan(plan, repair=False)
+        state = runtime.execute_plan(plan, repair=repair)
         status = getattr(state.status, "value", str(state.status))
-        ran = not state.failed_steps and status == "success"
+        written = outputs(folder)
+        correct = not state.failed_steps and status == "success" and bool(written)
 
-        if ran:
-            note = f"{len(plan.steps)} steps, output written"
+        if correct:
+            note = f"{len(plan.steps)} steps, wrote {', '.join(written)}"
         else:
             note = f"{status}: failed steps {', '.join(state.failed_steps) or 'none'}"
     except Exception as error:  # noqa: BLE001 - the failure is the result
         note = f"{type(error).__name__}: {' '.join(str(error).split())[:120]}"
-        ran = False
+        correct = False
+        written = outputs(folder)
+
+    if missing:
+        note += " (planned with " + ", ".join(missing) + ")"
 
     return {
         "name": name,
         "valid": True,
-        "ran": ran,
-        "seconds": elapsed,
+        "correct": correct,
+        "repairs": len(runtime.revisions),
+        "plan_seconds": plan_seconds,
+        "seconds": time.monotonic() - started,
         "steps": steps,
+        "outputs": written,
         "note": note,
     }
 
 
-def report(results: list[dict], out: Path | None) -> str:
+def report(results: list[dict], out: Path | None, repair: bool) -> str:
     valid = sum(1 for item in results if item["valid"])
-    ran = sum(1 for item in results if item["ran"])
+    correct = sum(1 for item in results if item["correct"])
     total = len(results)
+    extra = sum(max(0.0, item["seconds"] - item["plan_seconds"]) for item in results)
 
     lines = [
         f"Bundled model eval — {bundled.MODEL_FILE}",
+        f"Repair loop: {'on' if repair else 'off'}",
         f"Cases: {total}",
         f"Validated first try:  {valid} of {total} ({valid * 100 // total}%)",
-        f"Ran to completion:    {ran} of {total} ({ran * 100 // total}%)",
+        f"Correct output:       {correct} of {total} ({correct * 100 // total}%)",
+        f"Time after planning:  {extra:.0f}s in total, "
+        f"{extra / total:.0f}s per job",
         "",
-        f"{'case':30} {'valid':6} {'ran':4} {'time':>6}  note",
+        f"{'case':30} {'valid':6} {'ok':4} {'fix':4} {'plan':>6} {'total':>6}  note",
     ]
 
     for item in results:
         lines.append(
             f"{item['name']:30} "
             f"{'yes' if item['valid'] else 'no':6} "
-            f"{'yes' if item['ran'] else 'no':4} "
-            f"{item['seconds']:5.0f}s  {item['note']}"
+            f"{'yes' if item['correct'] else 'no':4} "
+            f"{item['repairs']:4} "
+            f"{item['plan_seconds']:5.0f}s {item['seconds']:5.0f}s  {item['note']}"
         )
 
         if item["steps"]:
-            lines.append(f"{'':30} {'':6} {'':4} {'':6}  " + " → ".join(item["steps"]))
+            lines.append(
+                f"{'':30} {'':6} {'':4} {'':4} {'':6} {'':6}  "
+                + " → ".join(item["steps"])
+            )
 
     text = "\n".join(lines) + "\n"
 
@@ -304,6 +328,11 @@ def main() -> int:
         "--only",
         default="",
         help="Run only cases whose name contains this text.",
+    )
+    parser.add_argument(
+        "--repair",
+        action="store_true",
+        help="Let the planner correct a failed plan, as the app does.",
     )
 
     arguments = parser.parse_args()
@@ -338,16 +367,25 @@ def main() -> int:
 
         for name, build in chosen:
             print(f"… {name}", flush=True)
-            result = run_case(name, build, Path(temporary))
+            result = run_case(
+                name,
+                build,
+                Path(temporary),
+                repair=arguments.repair,
+            )
             results.append(result)
-            print(f"  {result['note']} ({result['seconds']:.0f}s)", flush=True)
+            print(
+                f"  {result['note']} "
+                f"({result['seconds']:.0f}s, {result['repairs']} fixes)",
+                flush=True,
+            )
 
-    text = report(results, arguments.out)
+    text = report(results, arguments.out, arguments.repair)
 
     print()
     print(text, end="")
 
-    return 0 if all(item["ran"] for item in results) else 1
+    return 0 if all(item["correct"] for item in results) else 1
 
 
 if __name__ == "__main__":
