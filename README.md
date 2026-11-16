@@ -645,6 +645,28 @@ No model weights ship with this project (they are far larger than the
 executable). Local models come from Ollama, or LM Studio / llama.cpp through
 `--provider custom --base-url ...`.
 
+### Bundled model, no setup (prototype)
+
+A prototype provider downloads one small model once and runs it with
+llama.cpp, so a machine with a connection and nothing else can plan. It is
+off unless you ask for it:
+
+```bash
+# once: llama.cpp, with llama-server on the PATH (brew, conda, or a release)
+export OFFICE_AGENT_BUNDLED_MODEL=1
+export OFFICE_AGENT_LLAMA_SERVER=/path/to/llama-server   # optional
+export OFFICE_AGENT_MODELS=~/.local/share/office-agent/models  # optional
+
+export LLM_PROVIDER=bundled
+python run.py ai test
+```
+
+The first use downloads `Qwen2.5-1.5B-Instruct-Q4_K_M.gguf` (about 1 GB)
+into the models folder and keeps it only if the SHA-256 matches. After
+that, planning works offline. `python scripts/bundled_eval.py` runs the
+shipped example and five ordinary briefs through it and writes how many
+plans validated on the first try.
+
 ### Check and use
 
 ```bash

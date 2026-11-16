@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
+from agent import bundled
 from agent.llm import LLM, OpenAICompatibleLLM
 
 
@@ -55,6 +56,12 @@ PROVIDERS: dict[str, ProviderPreset] = {
         requires_key=False,
     ),
 }
+
+# The offline model only exists when its flag is set, so a build without
+# the flag has exactly the providers it had before.
+if bundled.enabled():
+    PROVIDERS[bundled.PROVIDER] = bundled.preset()
+
 
 SETUP_HINT = (
     "Configure the AI planner once with:\n"
@@ -134,6 +141,9 @@ def create_llm() -> LLM:
         raise RuntimeError(
             "No AI provider is configured.\n" + SETUP_HINT
         )
+
+    if provider == bundled.PROVIDER:
+        return bundled.create_client()
 
     preset = PROVIDERS.get(provider)
 
