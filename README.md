@@ -664,8 +664,10 @@ python run.py ai test
 The first use downloads `Qwen2.5-1.5B-Instruct-Q4_K_M.gguf` (about 1 GB)
 into the models folder and keeps it only if the SHA-256 matches. After
 that, planning works offline. `python scripts/bundled_eval.py` runs the
-shipped example and five ordinary briefs through it and writes how many
-plans validated on the first try.
+shipped example and five ordinary briefs through it and reports whether each
+plan validated, whether it produced a file, and whether the contents match
+the brief; `--model 3b` runs the larger model, `--repair` lets the planner
+correct a failed plan.
 
 ### Check and use
 

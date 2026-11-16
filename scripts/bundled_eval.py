@@ -263,8 +263,164 @@ def check_invoice(folder: Path) -> tuple[bool, str]:
     return True, "totals match and are sorted largest first"
 
 
+def harvest(path: Path) -> str:
+    """Every word and number a produced file contains, as plain text.
+
+    The model picks its own file formats, so a check reads whatever came out
+    rather than requiring one shape: workbook cells, Word paragraphs and
+    tables, and the raw text of csv, markdown and txt alike.
+    """
+
+    suffix = path.suffix.lower()
+
+    try:
+        if suffix in {".xlsx", ".xlsm"}:
+            from openpyxl import load_workbook
+
+            book = load_workbook(path, data_only=True)
+
+            return "\n".join(
+                " ".join("" if cell is None else str(cell) for cell in row)
+                for page in book.worksheets
+                for row in page.iter_rows(values_only=True)
+            )
+
+        if suffix == ".docx":
+            from docx import Document
+
+            document = Document(path)
+            parts = [paragraph.text for paragraph in document.paragraphs]
+
+            for table in document.tables:
+                for row in table.rows:
+                    parts.append(" ".join(cell.text for cell in row.cells))
+
+            return "\n".join(parts)
+
+        return path.read_text(encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001 - an unreadable file is a failed check
+        return ""
+
+
+def check_expected(
+    folder: Path,
+    required: tuple[str, ...],
+    forbidden: tuple[str, ...] = (),
+) -> tuple[bool, str]:
+    """One produced file must hold everything asked for and nothing else.
+
+    Per file rather than all files together: a worksheet that keeps every row
+    beside a correct filtered document is not the answer the brief asked for.
+    """
+
+    produced = outputs(folder)
+
+    if not produced:
+        return False, "no file to check"
+
+    rejected = []
+
+    for name in produced:
+        text = harvest(folder / "output" / name)
+
+        missing = [item for item in required if item.lower() not in text.lower()]
+        extra = [item for item in forbidden if item.lower() in text.lower()]
+
+        if not missing and not extra:
+            return True, f"{name} matches the brief"
+
+        reasons = []
+
+        if missing:
+            reasons.append(f"missing {', '.join(missing)}")
+
+        if extra:
+            reasons.append(f"still has {', '.join(extra)}")
+
+        rejected.append(f"{name} " + " and ".join(reasons))
+
+    return False, "; ".join(rejected)
+
+
+def check_products(folder: Path) -> tuple[bool, str]:
+    """Units >= 100: Kettle 140, Lamp 210, Mug 320 stay; Toaster 80, Chair 35 go."""
+
+    return check_expected(
+        folder,
+        required=("Kettle", "Lamp", "Mug"),
+        forbidden=("Toaster", "Chair"),
+    )
+
+
+def check_stock(folder: Path) -> tuple[bool, str]:
+    """OnHand below 25: Widget 12 and Nut 8 stay; Bolt 400 and Washer 55 go."""
+
+    ok, note = check_expected(
+        folder,
+        required=("Widget", "Nut"),
+        forbidden=("Bolt", "Washer"),
+    )
+
+    if not ok:
+        return ok, note
+
+    for name in outputs(folder):
+        text = harvest(folder / "output" / name)
+        numbers = {token.strip(".,:;()") for token in text.replace("|", " ").split()}
+
+        if {"12", "8"} <= numbers:
+            return True, f"{name} lists the two items and their quantities"
+
+    return False, "the items are right but the quantities are not shown"
+
+
+def check_contacts(folder: Path) -> tuple[bool, str]:
+    """Blank emails are dropped: Ana and Cara stay, Ben and Dan go."""
+
+    return check_expected(
+        folder,
+        required=("Ana Silva", "Cara Diaz"),
+        forbidden=("Ben Okafor", "Dan Wu"),
+    )
+
+
+def check_sales(folder: Path) -> tuple[bool, str]:
+    """Revenue per region from deals of 20+ units: 3530, 2740, 2240, 930."""
+
+    produced = outputs(folder)
+
+    if not produced:
+        return False, "no file to check"
+
+    totals = {"3530", "2740", "2240", "930"}
+    rejected = []
+
+    for name in produced:
+        text = harvest(folder / "output" / name)
+        numbers = {
+            token.strip(".,:;()$|")
+            for token in text.replace("|", " ").split()
+        }
+
+        regions = all(
+            region.lower() in text.lower()
+            for region in ("LatAm", "Europe", "Asia", "Africa")
+        )
+
+        if regions and totals <= numbers:
+            return True, f"{name} has the four regional totals"
+
+        rejected.append(f"{name} lacks the regional totals")
+
+    return False, "; ".join(rejected)
+
+
 CHECKS = {
     "invoice totals by client": check_invoice,
+    "filter products by units": check_products,
+    "reorder note from stock": check_stock,
+    "clean the contact list": check_contacts,
+    "sales-pack (shipped example)": check_sales,
 }
 
 CASES = [
