@@ -2,8 +2,11 @@
 How well does the bundled offline model plan, on the first try?
 
 Runs the shipped example (with its plan.json removed, so the model has to
-plan it) plus a handful of ordinary briefs through the bundled provider and
-counts the plans that pass validation without any repair.
+plan it) plus a handful of ordinary briefs through the bundled provider, and
+reports two separate things: whether the plan passed validation, and whether
+the run left a non-empty file behind. A file is not an answer, so a case
+with a content check — the invoice totals — is verified by reading its
+output back, and the rest are reported as unchecked.
 
     OFFICE_AGENT_BUNDLED_MODEL=1 \\
     OFFICE_AGENT_LLAMA_SERVER=/path/to/llama-server \\
@@ -172,6 +175,76 @@ def case_stock(folder: Path) -> list[str]:
     return []
 
 
+# What the invoice brief asks for, worked out by hand from the input rows.
+INVOICE_TOTALS = {
+    "Acme Ltd": 2000.0,
+    "Northwind": 430.5,
+    "Blue Ridge": 2250.75,
+}
+
+
+def check_invoice(folder: Path) -> tuple[bool, str]:
+    """Read the summary back and compare it with the totals we expect.
+
+    A non-empty file proves nothing: this checks the per-client totals and
+    that they are sorted the way the brief asked, largest first.
+    """
+
+    from openpyxl import load_workbook
+
+    produced = [
+        path
+        for path in (folder / "output").glob("*.xlsx")
+        if path.is_file() and path.stat().st_size > 0
+    ]
+
+    if not produced:
+        return False, "no workbook to check"
+
+    page = load_workbook(produced[0]).worksheets[0]
+    rows = [row for row in page.iter_rows(values_only=True) if any(row)]
+
+    if len(rows) < 2:
+        return False, "the summary has no data rows"
+
+    found: dict[str, float] = {}
+
+    for row in rows[1:]:
+        client = str(row[0]).strip()
+        try:
+            found[client] = float(row[1])
+        except (IndexError, TypeError, ValueError):
+            return False, f"a row is not client and number: {row!r}"
+
+    missing = sorted(set(INVOICE_TOTALS) - set(found))
+    wrong = sorted(
+        client
+        for client, total in INVOICE_TOTALS.items()
+        if client in found and abs(found[client] - total) > 0.001
+    )
+
+    if missing:
+        return False, f"missing clients: {', '.join(missing)}"
+
+    if wrong:
+        detail = "; ".join(
+            f"{client} {found[client]:g} instead of {INVOICE_TOTALS[client]:g}"
+            for client in wrong
+        )
+        return False, f"wrong totals: {detail}"
+
+    order = [found[str(row[0]).strip()] for row in rows[1:]]
+
+    if order != sorted(order, reverse=True):
+        return False, "totals are not sorted largest first"
+
+    return True, "totals match and are sorted largest first"
+
+
+CHECKS = {
+    "invoice totals by client": check_invoice,
+}
+
 CASES = [
     ("sales-pack (shipped example)", case_example),
     ("invoice totals by client", case_invoices),
@@ -235,7 +308,9 @@ def run_case(name: str, build, root: Path, repair: bool = False) -> dict:
         return {
             "name": name,
             "valid": False,
-            "correct": False,
+            "produced": False,
+            "verified": None,
+            "check_note": "",
             "repairs": 0,
             "plan_seconds": time.monotonic() - started,
             "seconds": time.monotonic() - started,
@@ -252,24 +327,35 @@ def run_case(name: str, build, root: Path, repair: bool = False) -> dict:
         state = runtime.execute_plan(plan, repair=repair)
         status = getattr(state.status, "value", str(state.status))
         written = outputs(folder)
-        correct = not state.failed_steps and status == "success" and bool(written)
+        produced = not state.failed_steps and status == "success" and bool(written)
 
-        if correct:
+        if produced:
             note = f"{len(plan.steps)} steps, wrote {', '.join(written)}"
         else:
             note = f"{status}: failed steps {', '.join(state.failed_steps) or 'none'}"
     except Exception as error:  # noqa: BLE001 - the failure is the result
         note = f"{type(error).__name__}: {' '.join(str(error).split())[:120]}"
-        correct = False
+        produced = False
         written = outputs(folder)
 
     if missing:
         note += " (planned with " + ", ".join(missing) + ")"
 
+    # A file is not an answer. Only a case with a checker can say whether
+    # the contents are right, and the rest are reported as unchecked.
+    checker = CHECKS.get(name)
+    verified: bool | None = None
+    check_note = ""
+
+    if checker is not None and produced:
+        verified, check_note = checker(folder)
+
     return {
         "name": name,
         "valid": True,
-        "correct": correct,
+        "produced": produced,
+        "verified": verified,
+        "check_note": check_note,
         "repairs": len(runtime.revisions),
         "plan_seconds": plan_seconds,
         "seconds": time.monotonic() - started,
@@ -279,9 +365,21 @@ def run_case(name: str, build, root: Path, repair: bool = False) -> dict:
     }
 
 
+def verdict(item: dict) -> str:
+    if item["verified"] is True:
+        return "right"
+
+    if item["verified"] is False:
+        return "wrong"
+
+    return "-" if not item["produced"] else "unchecked"
+
+
 def report(results: list[dict], out: Path | None, repair: bool) -> str:
     valid = sum(1 for item in results if item["valid"])
-    correct = sum(1 for item in results if item["correct"])
+    produced = sum(1 for item in results if item["produced"])
+    checked = sum(1 for item in results if item["verified"] is not None)
+    right = sum(1 for item in results if item["verified"] is True)
     total = len(results)
     extra = sum(max(0.0, item["seconds"] - item["plan_seconds"]) for item in results)
 
@@ -290,25 +388,36 @@ def report(results: list[dict], out: Path | None, repair: bool) -> str:
         f"Repair loop: {'on' if repair else 'off'}",
         f"Cases: {total}",
         f"Validated first try:  {valid} of {total} ({valid * 100 // total}%)",
-        f"Correct output:       {correct} of {total} ({correct * 100 // total}%)",
+        f"Produced output:      {produced} of {total} "
+        f"({produced * 100 // total}%) — a non-empty file, contents not implied",
+        f"Contents right:       {right} of {checked} checked "
+        f"({total - checked} not checked)",
         f"Time after planning:  {extra:.0f}s in total, "
         f"{extra / total:.0f}s per job",
         "",
-        f"{'case':30} {'valid':6} {'ok':4} {'fix':4} {'plan':>6} {'total':>6}  note",
+        f"{'case':30} {'valid':6} {'out':4} {'content':10} {'fix':4} "
+        f"{'plan':>6} {'total':>6}  note",
     ]
 
     for item in results:
         lines.append(
             f"{item['name']:30} "
             f"{'yes' if item['valid'] else 'no':6} "
-            f"{'yes' if item['correct'] else 'no':4} "
+            f"{'yes' if item['produced'] else 'no':4} "
+            f"{verdict(item):10} "
             f"{item['repairs']:4} "
             f"{item['plan_seconds']:5.0f}s {item['seconds']:5.0f}s  {item['note']}"
         )
 
+        if item["check_note"]:
+            lines.append(
+                f"{'':30} {'':6} {'':4} {'':10} {'':4} {'':6} {'':6}  "
+                f"check: {item['check_note']}"
+            )
+
         if item["steps"]:
             lines.append(
-                f"{'':30} {'':6} {'':4} {'':4} {'':6} {'':6}  "
+                f"{'':30} {'':6} {'':4} {'':10} {'':4} {'':6} {'':6}  "
                 + " → ".join(item["steps"])
             )
 
@@ -385,7 +494,7 @@ def main() -> int:
     print()
     print(text, end="")
 
-    return 0 if all(item["correct"] for item in results) else 1
+    return 0 if all(item["verified"] is True for item in results) else 1
 
 
 if __name__ == "__main__":
