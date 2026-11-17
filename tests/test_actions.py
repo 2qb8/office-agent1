@@ -587,6 +587,23 @@ class TextActionTests(ActionTestBase):
         self.assertEqual(result.data["text"], "one\ntwo\n")
         self.assertEqual(result.data["line_count"], 2)
 
+    def test_text_read_table(self):
+        path = self.root / "contacts.csv"
+        path.write_text(
+            "Name,Email\nAna Silva,ana@acme.example\n\nBen Okafor,\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_tool(
+            "text",
+            "read_table",
+            path=str(path),
+        )
+
+        self.assertEqual(result.data["headers"], ["Name", "Email"])
+        self.assertEqual(result.data["row_count"], 2)
+        self.assertIn("csv", result.message)
+
     def test_text_verify(self):
         path = self.root / "notes.txt"
         path.write_text("alpha beta\n", encoding="utf-8")

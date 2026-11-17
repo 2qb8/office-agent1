@@ -111,6 +111,19 @@ class ValidationTests(unittest.TestCase):
 
         self.assertIn("unregistered tool", message)
 
+    def test_unknown_action_rejected(self):
+        message = self.rejection(
+            "steps:\n"
+            "  - id: a\n"
+            "    tool: word\n"
+            "    action: send_document\n"
+            "    arguments: {output_path: output/a.docx}\n"
+        )
+
+        self.assertIn("unknown action", message)
+        self.assertIn("word.send_document", message)
+        self.assertIn("create_document", message)
+
     def test_evidence_must_stay_in_evidence_dir(self):
         message = self.rejection(
             "steps:\n"

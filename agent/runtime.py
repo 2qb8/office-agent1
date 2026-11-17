@@ -419,6 +419,15 @@ class AgentRuntime:
                     "no action."
                 )
 
+            supported = getattr(self.registry.get(step.tool), "actions", ())
+
+            if supported and step.action not in supported:
+                raise PlanValidationError(
+                    f"Plan validation failed: step '{step.id}' uses "
+                    f"unknown action '{step.tool}.{step.action}'. "
+                    f"{step.tool} has: {', '.join(supported)}"
+                )
+
             if not isinstance(step.arguments, dict):
                 raise PlanValidationError(
                     f"Plan validation failed: step '{step.id}' "

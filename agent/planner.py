@@ -73,6 +73,21 @@ DATA BETWEEN STEPS
   for example "$sales.rows" or "$totals.headers".
 - read_table results contain: headers, rows, row_count, column_count.
 - inspect results describe a file without reading all of it.
+- table.aggregate returns the group column (when you passed group_by) and
+  one column named "<op>(<column>)", for example "sum(Revenue)". A later
+  sort, filter or select must name that column, not the source column.
+
+FORMATS — WHICH TOOL HANDLES WHICH FILE
+- .xlsx and .xlsm belong to excel. excel.read_table reads them and
+  excel.create_workbook writes them. It reads nothing else: a CSV or TSV is
+  not a workbook.
+- .csv and .tsv belong to text. text.read_table reads one into headers and
+  rows, text.write writes one from headers and rows.
+- .docx belongs to word. word.create_document writes it. It refuses any
+  other extension, so plans that send .md, .txt or .csv to word fail.
+- .md, .txt and .json belong to text.write, never to word.
+- PNG previews come from screenshot.document or screenshot.workbook and go
+  in evidence/.
 
 EXAMPLE
 
@@ -159,6 +174,8 @@ TOOLS AND ACTIONS
 - word.verify_document(path, expected={paragraphs, tables})
 - text.write(output_path, one of content | lines | data | headers+rows[, mode])
 - text.read(path)
+- text.read_table(path[, delimiter, header_row, max_rows]) — CSV/TSV to
+  headers and rows, like excel.read_table
 - text.verify(path[, expected_text, expected_contains])
 - table.filter(headers, rows, column, op, value)
 - table.sort(headers, rows, column[, descending])
@@ -221,6 +238,10 @@ format as the original:
 "arguments", "depends_on"}]}
 
 RULES
+- If the error is about a file type (for example "Output must be DOCX" or
+  "Expected .xlsx"), the tool was wrong for that path: send .md, .txt, .csv
+  and .tsv to text.write, .docx to word, .xlsx to excel, and read a CSV with
+  text.read_table rather than excel.read_table.
 - Steps before the failed step already ran: keep their ids, tools, actions
   and arguments unchanged, in the same order. Their results are still in
   use, and they are not run again.

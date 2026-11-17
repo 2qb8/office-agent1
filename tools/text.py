@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,7 @@ class TextTool(Tool):
     actions = (
         "write",
         "read",
+        "read_table",
         "verify",
     )
 
@@ -51,6 +53,9 @@ class TextTool(Tool):
 
         if action == "read":
             return self._read(arguments)
+
+        if action == "read_table":
+            return self._read_table(arguments)
 
         if action == "verify":
             return self._verify(arguments)
@@ -161,6 +166,100 @@ class TextTool(Tool):
                 "text": text,
                 "line_count": len(text.splitlines()),
                 "character_count": len(text),
+            },
+            evidence=[str(path)],
+        )
+
+    def _read_table(self, arguments: dict[str, Any]) -> ToolResult:
+        """A CSV or TSV as headers and rows, the shape table steps expect.
+
+        Without this a delimited file could only be read as text, and every
+        filtering or totalling step downstream had nothing to work on.
+        """
+
+        raw_path = arguments.get("path")
+
+        if not raw_path:
+            return ToolResult(
+                success=False,
+                error="read_table requires 'path'.",
+            )
+
+        path = Path(str(raw_path)).resolve()
+
+        if not path.exists():
+            return ToolResult(
+                success=False,
+                error=f"Text table not found: {path}",
+            )
+
+        delimiter = str(
+            arguments.get("delimiter")
+            or ("\t" if path.suffix.lower() == ".tsv" else ",")
+        )
+
+        try:
+            header_row = int(arguments.get("header_row") or 1)
+        except (TypeError, ValueError):
+            return ToolResult(
+                success=False,
+                error="header_row must be a number.",
+            )
+
+        if header_row < 1:
+            return ToolResult(
+                success=False,
+                error="header_row starts at 1.",
+            )
+
+        try:
+            with path.open(encoding="utf-8-sig", newline="") as handle:
+                parsed = [
+                    row
+                    for row in csv.reader(handle, delimiter=delimiter)
+                    if any(cell.strip() for cell in row)
+                ]
+        except (OSError, csv.Error) as exc:
+            return ToolResult(
+                success=False,
+                error=f"Failed to read {path.name}: {exc}",
+            )
+
+        if len(parsed) < header_row:
+            return ToolResult(
+                success=False,
+                error=(
+                    f"{path.name} has {len(parsed)} rows, so there is no "
+                    f"header row {header_row}."
+                ),
+            )
+
+        headers = [cell.strip() for cell in parsed[header_row - 1]]
+        rows = [
+            list(row) + [""] * (len(headers) - len(row))
+            for row in parsed[header_row:]
+        ]
+
+        max_rows = arguments.get("max_rows")
+
+        if max_rows is not None:
+            try:
+                rows = rows[: int(max_rows)]
+            except (TypeError, ValueError):
+                return ToolResult(
+                    success=False,
+                    error="max_rows must be a number.",
+                )
+
+        return ToolResult(
+            success=True,
+            message=f"Read {len(rows)} rows from {path.name}",
+            data={
+                "path": str(path),
+                "headers": headers,
+                "rows": rows,
+                "row_count": len(rows),
+                "column_count": len(headers),
             },
             evidence=[str(path)],
         )
