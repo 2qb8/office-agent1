@@ -489,7 +489,9 @@ def run_case(name: str, build, root: Path, repair: bool = False) -> dict:
             "produced": False,
             "verified": None,
             "check_note": "",
-            "repairs": 0,
+            # A rejection that was revised and refused again still cost a
+            # model call, and the table should say so.
+            "repairs": len(runtime.revisions),
             "plan_seconds": time.monotonic() - started,
             "seconds": time.monotonic() - started,
             "steps": [],

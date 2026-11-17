@@ -15,7 +15,12 @@ from openpyxl import Workbook
 
 from agent.llm import LLM
 from agent.registry import build_registry
-from agent.runtime import MAX_REPAIRS, AgentRuntime
+from agent.runtime import (
+    MAX_REPAIRS,
+    AgentRuntime,
+    PlanValidationError,
+    _is_repairable,
+)
 
 
 BRIEF = (
@@ -174,6 +179,139 @@ class RepairTestCase(unittest.TestCase):
 
     def log(self) -> str:
         return (self.job / "run.log").read_text(encoding="utf-8")
+
+
+PLAN_WITH_UNKNOWN_ACTION = {
+    "goal": "Totals",
+    "steps": [
+        {
+            "id": "read",
+            "description": "Read the sheet",
+            "tool": "excel",
+            "action": "read_table",
+            "arguments": {"path": "inputs/sales.xlsx", "sheet": "Sales"},
+        },
+        {
+            "id": "append",
+            "description": "Add the rows to the text file",
+            "tool": "text",
+            "action": "append_elements",
+            "arguments": {
+                "output_path": "output/rows.txt",
+                "headers": "$read.headers",
+                "rows": "$read.rows",
+            },
+        },
+    ],
+}
+
+PLAN_THAT_WRITES_THE_ROWS = {
+    "goal": "Totals",
+    "steps": [
+        PLAN_WITH_UNKNOWN_ACTION["steps"][0],
+        {
+            "id": "write",
+            "description": "Write the rows to the text file",
+            "tool": "text",
+            "action": "write",
+            "arguments": {
+                "output_path": "output/rows.txt",
+                "headers": "$read.headers",
+                "rows": "$read.rows",
+            },
+        },
+    ],
+}
+
+
+class ValidationRepairTests(RepairTestCase):
+    """A plan the validator refuses gets one correction, not zero."""
+
+    def test_a_rejected_plan_is_repaired_with_the_validator_message(self):
+        llm = ScriptedLLM(PLAN_WITH_UNKNOWN_ACTION, PLAN_THAT_WRITES_THE_ROWS)
+
+        runtime, state = self.run_job(llm)
+
+        self.assertEqual(state.status.value, "success")
+        self.assertTrue((self.job / "output" / "rows.txt").is_file())
+        self.assertEqual(len(llm.prompts), 2)
+
+        request = llm.text_at(1)
+
+        self.assertIn("unknown action", request)
+        self.assertIn("append_elements", request)
+        self.assertIn("FAILED STEP: append", request)
+
+        saved = self.saved_plan()
+
+        self.assertEqual(len(saved["revisions"]), 1)
+        self.assertEqual(saved["revisions"][0]["step"], "append")
+        self.assertIn("unknown action", saved["revisions"][0]["error"])
+        self.assertEqual(runtime.revisions[0]["step"], "append")
+
+    def test_a_second_rejection_is_the_answer(self):
+        llm = ScriptedLLM(
+            PLAN_WITH_UNKNOWN_ACTION,
+            PLAN_WITH_UNKNOWN_ACTION,
+        )
+
+        runtime = AgentRuntime(self.job, build_registry())
+
+        with mock.patch(
+            "agent.runtime.try_create_llm",
+            return_value=llm,
+        ):
+            with redirect_stdout(io.StringIO()):
+                with self.assertRaises(PlanValidationError) as caught:
+                    runtime.run()
+
+        # One attempt: the first plan and one revision, then stop.
+        self.assertEqual(len(llm.prompts), 2)
+        self.assertIn("unknown action", str(caught.exception))
+        self.assertFalse((self.job / "output" / "rows.txt").exists())
+        self.assertIn("Rejected:", self.log())
+        self.assertIn("was rejected too", self.log())
+
+        # The call happened, so the cost is on the record even though the
+        # revision was refused.
+        self.assertEqual(len(runtime.revisions), 1)
+        self.assertEqual(runtime.revisions[0]["step"], "append")
+
+    def test_a_spec_is_not_revised(self):
+        (self.job / "instruction.txt").write_text(
+            "title: Totals\n"
+            "steps:\n"
+            "  - id: append\n"
+            "    tool: text\n"
+            "    action: append_elements\n"
+            "    arguments: {output_path: output/rows.txt}\n",
+            encoding="utf-8",
+        )
+
+        runtime = AgentRuntime(self.job, build_registry())
+
+        with mock.patch(
+            "agent.runtime.try_create_llm",
+            return_value=ScriptedLLM(PLAN_THAT_WRITES_THE_ROWS),
+        ):
+            with redirect_stdout(io.StringIO()):
+                with self.assertRaises(PlanValidationError):
+                    runtime.plan()
+
+
+class RepairableErrorTests(unittest.TestCase):
+    def test_wrong_file_type_and_unknown_actions_are_repairable(self):
+        for message in (
+            "Output must be DOCX: /tmp/job/output/note.md",
+            "Expected .xlsx or .xlsm file, got: .csv",
+            "Unknown action 'text.append_elements'",
+            "step 'a' uses unknown action 'word.send_document'",
+            "no such action",
+        ):
+            self.assertTrue(_is_repairable(message), message)
+
+    def test_a_disk_error_is_not_repairable(self):
+        self.assertFalse(_is_repairable("No space left on device"))
 
 
 class RepairTests(RepairTestCase):
