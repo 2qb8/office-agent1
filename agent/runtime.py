@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 from datetime import datetime
 from pathlib import Path
 
@@ -24,7 +23,6 @@ from agent.models import (
     JobInstruction,
     JobPlan,
     JobState,
-    PlanStep,
     StepStatus,
 )
 from agent.planfile import fingerprint, load_plan, save_plan
@@ -624,9 +622,6 @@ class AgentRuntime:
             f"Job started: {self.job_id}",
         )
 
-        # Corrections are counted per job, from the first plan to the last.
-        self.revisions = []
-
         instruction = self.read_instruction()
 
         plan = self.create_plan(
@@ -640,85 +635,11 @@ class AgentRuntime:
             "Validating generated plan",
         )
 
-        plan = self._validate_or_repair(plan, llm)
+        self.validate_plan(plan)
 
         self.logger.log("VALIDATOR", "Plan validation passed")
 
         return plan
-
-    def _validate_or_repair(self, plan: JobPlan, llm) -> JobPlan:
-        """Validate, and give a model-made plan one chance to be corrected.
-
-        A plan the validator refuses has not run, so this is the cheapest
-        failure in the run: the message names the offending step and the
-        tools it may use instead. Only plans a model wrote are revised; a
-        saved plan or a spec is the user's text and is left alone.
-        """
-
-        try:
-            self.validate_plan(plan)
-
-            return plan
-
-        except PlanValidationError as error:
-            message = str(error)
-
-        if self.plan_source not in {"api", "chat"}:
-            raise PlanValidationError(message)
-
-        if llm is None:
-            llm = try_create_llm()
-
-        if llm is None:
-            raise PlanValidationError(message)
-
-        step = _step_named_in(message, plan)
-
-        self.logger.log("VALIDATOR", f"Rejected: {message}")
-        self.logger.log(
-            "PLANNER",
-            f"Repair attempt 1/1 after a rejected plan "
-            f"(step '{step.id}')",
-        )
-
-        try:
-            revised = self._revise(plan, step, message, llm)
-        except PlanValidationError as again:
-            # _revise validates its own answer, so this is the second
-            # rejection: one attempt, spent.
-            self.revisions.append(
-                _revision_record(1, step.id, message, plan, self.job_path)
-            )
-
-            self.logger.log(
-                "VALIDATOR",
-                f"The revised plan was rejected too: {again}",
-            )
-
-            raise
-        except Exception as exc:  # noqa: BLE001 - a failed repair is a failed run
-            self.logger.log(
-                "PLANNER",
-                f"The revision could not be used: {exc}",
-            )
-
-            raise PlanValidationError(message) from None
-
-        # The call happened whether or not the answer is usable, so it is
-        # recorded even when the revision is the answer to nothing.
-        self.revisions.append(
-            _revision_record(1, step.id, message, plan, self.job_path)
-        )
-
-        self.logger.log(
-            "PLANNER",
-            f"The revised plan passes validation "
-            f"({len(revised.steps)} steps)",
-        )
-
-        self.save_plan(revised, self.plan_source)
-
-        return revised
 
     def execute_plan(
         self,
@@ -733,6 +654,8 @@ class AgentRuntime:
         planner for a correction, twice at most, and the run continues from
         the step that failed instead of starting over.
         """
+
+        self.revisions = []
 
         state = self.execute(plan, progress=progress, cancel=cancel)
 
@@ -992,24 +915,6 @@ def _is_repairable(error: str) -> bool:
     text = (error or "").lower()
 
     return any(hint in text for hint in REPAIRABLE_ERRORS)
-
-
-def _step_named_in(message: str, plan: JobPlan) -> PlanStep:
-    """The step a validator message is about, for the repair request.
-
-    Messages name it ("step 'append_items' uses unknown action"), so that id
-    is used when it matches a step; otherwise the first step is the best
-    guess and the message still carries the real complaint.
-    """
-
-    match = re.search(r"step '([^']+)'", message or "")
-
-    if match is not None:
-        for step in plan.steps:
-            if step.id == match.group(1):
-                return step
-
-    return plan.steps[0]
 
 
 def _keeps_completed_steps(plan: JobPlan, state: JobState) -> bool:

@@ -224,36 +224,16 @@ PLAN_THAT_WRITES_THE_ROWS = {
 }
 
 
-class ValidationRepairTests(RepairTestCase):
-    """A plan the validator refuses gets one correction, not zero."""
+class RejectedPlanTests(RepairTestCase):
+    """A rejected plan is not retried, and here is why it is not.
 
-    def test_a_rejected_plan_is_repaired_with_the_validator_message(self):
+    Measured on both bundled models: the revision repeated the same mistake,
+    so the attempt cost about 110s and changed nothing. See
+    docs/bundled-eval-validation-repair.md.
+    """
+
+    def test_a_rejected_plan_costs_exactly_one_call(self):
         llm = ScriptedLLM(PLAN_WITH_UNKNOWN_ACTION, PLAN_THAT_WRITES_THE_ROWS)
-
-        runtime, state = self.run_job(llm)
-
-        self.assertEqual(state.status.value, "success")
-        self.assertTrue((self.job / "output" / "rows.txt").is_file())
-        self.assertEqual(len(llm.prompts), 2)
-
-        request = llm.text_at(1)
-
-        self.assertIn("unknown action", request)
-        self.assertIn("append_elements", request)
-        self.assertIn("FAILED STEP: append", request)
-
-        saved = self.saved_plan()
-
-        self.assertEqual(len(saved["revisions"]), 1)
-        self.assertEqual(saved["revisions"][0]["step"], "append")
-        self.assertIn("unknown action", saved["revisions"][0]["error"])
-        self.assertEqual(runtime.revisions[0]["step"], "append")
-
-    def test_a_second_rejection_is_the_answer(self):
-        llm = ScriptedLLM(
-            PLAN_WITH_UNKNOWN_ACTION,
-            PLAN_WITH_UNKNOWN_ACTION,
-        )
 
         runtime = AgentRuntime(self.job, build_registry())
 
@@ -265,17 +245,11 @@ class ValidationRepairTests(RepairTestCase):
                 with self.assertRaises(PlanValidationError) as caught:
                     runtime.run()
 
-        # One attempt: the first plan and one revision, then stop.
-        self.assertEqual(len(llm.prompts), 2)
+        # The good second plan is never asked for.
+        self.assertEqual(len(llm.prompts), 1)
         self.assertIn("unknown action", str(caught.exception))
+        self.assertEqual(runtime.revisions, [])
         self.assertFalse((self.job / "output" / "rows.txt").exists())
-        self.assertIn("Rejected:", self.log())
-        self.assertIn("was rejected too", self.log())
-
-        # The call happened, so the cost is on the record even though the
-        # revision was refused.
-        self.assertEqual(len(runtime.revisions), 1)
-        self.assertEqual(runtime.revisions[0]["step"], "append")
 
     def test_a_spec_is_not_revised(self):
         (self.job / "instruction.txt").write_text(
