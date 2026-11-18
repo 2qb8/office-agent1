@@ -1,8 +1,8 @@
 Only present while the last Windows run failed; CI removes it
 once the run is green again. No sign-in needed to read this.
 
-Run:    https://github.com/2qb8/office-agent1/actions/runs/44212953920
-Commit: fbe3a8a766ce0875c3df622311b8921aafce6c1d
+Run:    https://github.com/2qb8/office-agent1/actions/runs/44218615256
+Commit: 97f2227254d2bacf93e4f4aed28aed1fb1512e1c
 
 Steps:
   install=success
