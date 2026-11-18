@@ -699,8 +699,9 @@ aggregate never made), and names the step and the allowed alternatives in the
 message.
 
 What these models cannot do yet, measured on five briefs at 1.5B and 3B
-(`docs/bundled-eval-*.md`): about one brief in five comes out right, the
-shipped example never produces all seven files, and a rejected plan is not
+(`docs/bundled-eval-stricter-validation.md` is the most recent run): about
+one brief in five comes out right, the shipped example never produces all
+seven files, and a rejected plan is not
 retried, because both models repeated the same mistake when given the
 correction message. A hosted model is a different story: the message is
 written to be actionable for anything that can diff an error against an
