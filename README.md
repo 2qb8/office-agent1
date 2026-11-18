@@ -457,8 +457,10 @@ installation is needed.
 
 It covers spec parsing (fenced and plain YAML, JSON, smart quotes,
 plan defaults and rejections), the validation guards (path escapes,
-input modification, forward references, unknown tools), DOCX table
-reading, and full job runs driven by a DOCX instruction — including
+input modification, forward references, unknown tools, unknown actions,
+a file extension the chosen tool cannot write, and a sort or filter on a
+column the previous step did not produce), DOCX table reading, and full
+job runs driven by a DOCX instruction — including
 a DOCX table feeding an XLSX and a CSV output, plus a job that reads
 text, appends to a document, renders a screenshot and attaches it.
 
@@ -661,9 +663,12 @@ export LLM_PROVIDER=bundled
 python run.py ai test
 ```
 
-The first use downloads `Qwen2.5-1.5B-Instruct-Q4_K_M.gguf` (about 1 GB)
-into the models folder and keeps it only if the SHA-256 matches. After
-that, planning works offline. `python scripts/bundled_eval.py` runs the
+The first use checks there is room, then downloads
+`Qwen2.5-1.5B-Instruct-Q4_K_M.gguf` (about 1 GB) into the models folder and
+keeps it only if the SHA-256 matches. After that, planning works offline.
+The server's own output goes to `llama-server.log` beside the model, so a
+failed start can be read; `OFFICE_AGENT_BUNDLED_TIMEOUT` (seconds, default
+600) is how long one planning call may take on a slow machine. `python scripts/bundled_eval.py` runs the
 shipped example and five ordinary briefs through it and reports whether each
 plan validated, whether it produced a file, and whether the contents match
 the brief; `--model 3b` runs the larger model, `--repair` lets the planner
@@ -684,6 +689,19 @@ sizes, worksheet headers and sample rows). Files stay on your machine.
 
 ### Model notes
 
-Small local models (3B–8B) handle these plans well because the prompt gives
-the exact tool catalogue and JSON shape. If a model returns a plan that names
-an unknown tool, the validator rejects it before anything runs.
+Small local models (3B–8B) get the plan's shape right and the details wrong:
+which tool writes which extension, which column an aggregate produced, in
+which order a table should end up. The prompt gives the exact tool catalogue,
+a format table and the two shapes that go wrong most often; the validator
+rejects what it can prove wrong before anything runs (unknown tool, unknown
+action, a `.md` path handed to the Word writer, a sort on a column the
+aggregate never made), and names the step and the allowed alternatives in the
+message.
+
+What these models cannot do yet, measured on five briefs at 1.5B and 3B
+(`docs/bundled-eval-*.md`): about one brief in five comes out right, the
+shipped example never produces all seven files, and a rejected plan is not
+retried, because both models repeated the same mistake when given the
+correction message. A hosted model is a different story: the message is
+written to be actionable for anything that can diff an error against an
+allowed list.

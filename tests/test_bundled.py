@@ -141,6 +141,41 @@ class BundledModelTests(unittest.TestCase):
         ):
             self.assertIsNone(bundled.find_server())
 
+    def test_the_timeout_can_be_raised_for_slow_machines(self):
+        with mock.patch.dict(
+            os.environ, {"OFFICE_AGENT_BUNDLED_TIMEOUT": "1800"}
+        ):
+            self.assertEqual(bundled.timeout_seconds(), 1800)
+
+        with mock.patch.dict(
+            os.environ, {"OFFICE_AGENT_BUNDLED_TIMEOUT": "soon"}
+        ):
+            self.assertEqual(
+                bundled.timeout_seconds(), bundled.GENERATE_TIMEOUT
+            )
+
+    def test_the_server_log_sits_beside_the_model(self):
+        self.assertEqual(
+            bundled.server_log_path(),
+            bundled.models_dir() / "llama-server.log",
+        )
+
+    def test_a_full_disk_is_explained_before_any_download(self):
+        usage = mock.Mock(free=10 * 1024 * 1024)
+
+        with mock.patch.object(bundled.shutil, "disk_usage", return_value=usage):
+            with mock.patch.object(
+                bundled.urllib.request,
+                "urlopen",
+                side_effect=AssertionError("downloaded anyway"),
+            ):
+                with self.assertRaises(bundled.BundledError) as caught:
+                    bundled.ensure_model()
+
+        self.assertIn("MB free", str(caught.exception))
+        self.assertIn("OFFICE_AGENT_MODELS", str(caught.exception))
+        self.assertFalse(bundled.model_path().exists())
+
     def test_describe_is_one_line(self):
         line = bundled.describe()
 

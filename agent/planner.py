@@ -89,6 +89,14 @@ FORMATS — WHICH TOOL HANDLES WHICH FILE
 - PNG previews come from screenshot.document or screenshot.workbook and go
   in evidence/.
 
+TWO SHAPES THAT GO WRONG
+- A CSV: text.read_table gives headers and rows, table.filter trims it,
+  text.write(output_path="output/clean.csv", headers=..., rows=...) writes
+  it back. excel.read_table cannot read it and word cannot write it.
+- An aggregate: table.aggregate(op="sum", column="Revenue",
+  group_by="Region") returns the headers ["Region", "sum(Revenue)"]. A
+  later sort must name "sum(Revenue)", never "Revenue".
+
 EXAMPLE
 
 Brief: "Take inputs/stock.xlsx, sheet Stock. Put every item with fewer than

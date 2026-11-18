@@ -124,6 +124,110 @@ class ValidationTests(unittest.TestCase):
         self.assertIn("word.send_document", message)
         self.assertIn("create_document", message)
 
+    def test_a_markdown_path_for_the_word_tool_is_rejected(self):
+        message = self.rejection(
+            "steps:\n"
+            "  - id: note\n"
+            "    tool: word\n"
+            "    action: create_document\n"
+            "    arguments:\n"
+            "      output_path: output/note.md\n"
+            "      elements: []\n"
+        )
+
+        self.assertIn("writes note.md with word.create_document", message)
+        self.assertIn(".docx", message)
+
+    def test_a_csv_for_the_excel_writer_is_rejected(self):
+        message = self.rejection(
+            "steps:\n"
+            "  - id: rows\n"
+            "    tool: excel\n"
+            "    action: create_workbook\n"
+            "    arguments:\n"
+            "      output_path: output/rows.csv\n"
+            "      sheets: []\n"
+        )
+
+        self.assertIn("writes rows.csv", message)
+
+    def test_a_sort_on_a_column_the_aggregate_did_not_make_is_rejected(self):
+        message = self.rejection(
+            "steps:\n"
+            "  - id: sales\n"
+            "    tool: excel\n"
+            "    action: read_table\n"
+            "    arguments: {path: inputs/sales.xlsx, sheet: Sales}\n"
+            "  - id: totals\n"
+            "    tool: table\n"
+            "    action: aggregate\n"
+            "    arguments:\n"
+            "      headers: $sales.headers\n"
+            "      rows: $sales.rows\n"
+            "      column: Revenue\n"
+            "      op: sum\n"
+            "      group_by: Region\n"
+            "  - id: ordered\n"
+            "    tool: table\n"
+            "    action: sort\n"
+            "    arguments:\n"
+            "      headers: $totals.headers\n"
+            "      rows: $totals.rows\n"
+            "      column: Revenue\n"
+        )
+
+        self.assertIn("uses column 'Revenue'", message)
+        self.assertIn("sum(Revenue)", message)
+
+    def test_sorting_by_the_aggregate_column_passes(self):
+        instruction = self.job / "instruction.txt"
+        instruction.write_text(
+            "steps:\n"
+            "  - id: totals\n"
+            "    tool: table\n"
+            "    action: aggregate\n"
+            "    arguments:\n"
+            "      headers: [Region, Revenue]\n"
+            "      rows: [[LatAm, 10]]\n"
+            "      column: Revenue\n"
+            "      op: sum\n"
+            "      group_by: Region\n"
+            "  - id: ordered\n"
+            "    tool: table\n"
+            "    action: sort\n"
+            "    arguments:\n"
+            "      headers: $totals.headers\n"
+            "      rows: $totals.rows\n"
+            "      column: sum(Revenue)\n"
+            "      descending: true\n",
+            encoding="utf-8",
+        )
+
+        runtime = AgentRuntime(self.job, build_registry())
+
+        with redirect_stdout(io.StringIO()):
+            plan = runtime.create_plan(runtime.read_instruction())
+            runtime.validate_plan(plan)
+
+        self.assertEqual(len(plan.steps), 2)
+
+    def test_a_literal_column_that_is_not_in_literal_headers_is_rejected(self):
+        message = self.rejection(
+            "steps:\n"
+            "  - id: low\n"
+            "    tool: table\n"
+            "    action: filter\n"
+            "    arguments:\n"
+            "      headers: [Item, Units]\n"
+            "      rows: [[Bolt, 400]]\n"
+            "      column: Quantity\n"
+            "      op: '<'\n"
+            "      value: 5\n"
+        )
+
+        self.assertIn("uses column 'Quantity'", message)
+        self.assertIn("Item, Units", message)
+
     def test_evidence_must_stay_in_evidence_dir(self):
         message = self.rejection(
             "steps:\n"

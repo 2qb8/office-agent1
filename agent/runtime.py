@@ -71,6 +71,29 @@ MODIFY_ACTIONS: set[tuple[str, str]] = {
 }
 
 
+# The extension each writing action can produce. A plan that sends a .md
+# path to the Word tool is wrong before it runs, and saying so here costs
+# nothing where the same mistake costs a whole run later.
+WRITE_SUFFIXES: dict[tuple[str, str], set[str]] = {
+    ("word", "create_document"): {".docx"},
+    ("word", "export_text"): {".txt"},
+    ("excel", "create_workbook"): {".xlsx", ".xlsm"},
+    ("text", "write"): {
+        ".txt",
+        ".md",
+        ".markdown",
+        ".csv",
+        ".tsv",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".log",
+    },
+    ("screenshot", "document"): {".png"},
+    ("screenshot", "workbook"): {".png"},
+}
+
+
 # How many times a failed step is sent back to the planner before the run
 # is left failed. Two corrections is enough for a wrong column or sheet
 # name, and it bounds what one broken brief can cost.
@@ -399,6 +422,11 @@ class AgentRuntime:
 
         seen_ids: list[str] = []
 
+        # Headers each step's result will have, where the plan says enough
+        # to know them; used to catch a sort or filter on a column that the
+        # aggregate never produced.
+        known_headers: dict[str, list[str]] = {}
+
         for step in plan.steps:
 
             if not step.id.strip():
@@ -507,6 +535,21 @@ class AgentRuntime:
                         "output/",
                     )
 
+            if action in WRITE_SUFFIXES and not _is_reference(raw_output):
+                self._require_known_suffix(step, raw_output)
+
+            problem = _unknown_table_column(step, known_headers)
+
+            if problem:
+                raise PlanValidationError(
+                    f"Plan validation failed: step '{step.id}' {problem}"
+                )
+
+            produced = _headers_produced(step, known_headers)
+
+            if produced is not None:
+                known_headers[step.id] = produced
+
             raw_evidence = step.arguments.get("evidence_path")
 
             if raw_evidence and not _is_reference(raw_evidence):
@@ -534,6 +577,22 @@ class AgentRuntime:
                     )
 
             seen_ids.append(step.id)
+
+    @staticmethod
+    def _require_known_suffix(step, raw_output) -> None:
+        suffixes = WRITE_SUFFIXES[(step.tool, step.action)]
+        name = Path(str(raw_output)).name
+
+        if Path(name).suffix.lower() in suffixes:
+            return
+
+        allowed = " or ".join(sorted(suffixes))
+
+        raise PlanValidationError(
+            f"Plan validation failed: step '{step.id}' writes {name} with "
+            f"{step.tool}.{step.action}, which writes {allowed}. Send the "
+            f"file to the tool that writes that format."
+        )
 
     @staticmethod
     def _require_inside(
@@ -907,6 +966,134 @@ class AgentRuntime:
                 paths.append(resolved)
 
         return paths
+
+
+def _headers_reference(value) -> str | None:
+    """The step id in "$step.headers", or None for anything else."""
+
+    if not isinstance(value, str):
+        return None
+
+    text = value.strip()
+
+    if not text.startswith("$"):
+        return None
+
+    step_id, _, field = text[1:].partition(".")
+
+    if field != "headers" or not step_id:
+        return None
+
+    return step_id
+
+
+def _literal_headers(value) -> list[str] | None:
+    """A headers argument written out in full, or None."""
+
+    if not isinstance(value, list) or not value:
+        return None
+
+    if not all(isinstance(item, str) and not _is_reference(item) for item in value):
+        return None
+
+    return [str(item) for item in value]
+
+
+def _headers_produced(
+    step,
+    known: dict[str, list[str]],
+) -> list[str] | None:
+    """The headers this step's result will have, when that is knowable.
+
+    Only table steps are modelled. An aggregate names its own columns, so a
+    later step can be checked against them exactly; everything else passes
+    its input headers through unchanged.
+    """
+
+    if step.tool != "table":
+        return None
+
+    arguments = step.arguments or {}
+
+    if step.action == "aggregate":
+        column = arguments.get("column")
+
+        if not isinstance(column, str) or _is_reference(column):
+            return None
+
+        operation = str(arguments.get("op") or "sum").lower()
+        headers = [f"{operation}({column})"]
+        group = arguments.get("group_by")
+
+        if isinstance(group, str) and not _is_reference(group):
+            headers.insert(0, group)
+
+        return headers
+
+    if step.action == "select":
+        return _literal_headers(arguments.get("columns"))
+
+    if step.action in {"filter", "sort", "limit"}:
+        source = _headers_reference(arguments.get("headers"))
+
+        if source is not None:
+            return known.get(source)
+
+        return _literal_headers(arguments.get("headers"))
+
+    return None
+
+
+def _unknown_table_column(
+    step,
+    known: dict[str, list[str]],
+) -> str | None:
+    """The complaint when a table step names a column it cannot have."""
+
+    if step.tool != "table":
+        return None
+
+    arguments = step.arguments or {}
+    headers = arguments.get("headers")
+    source = _headers_reference(headers)
+
+    if source is not None:
+        available = known.get(source)
+    else:
+        available = _literal_headers(headers)
+
+    if not available:
+        return None
+
+    named: list[str] = []
+
+    column = arguments.get("column")
+
+    if isinstance(column, str) and not _is_reference(column):
+        named.append(column)
+
+    group = arguments.get("group_by")
+
+    if isinstance(group, str) and not _is_reference(group):
+        named.append(group)
+
+    columns = arguments.get("columns")
+
+    if isinstance(columns, list):
+        named.extend(
+            item
+            for item in columns
+            if isinstance(item, str) and not _is_reference(item)
+        )
+
+    for name in named:
+        if name not in available:
+            return (
+                f"uses column '{name}', which that table does not have. "
+                f"Its columns are: {', '.join(available)}"
+            )
+
+    return None
 
 
 def _is_repairable(error: str) -> bool:

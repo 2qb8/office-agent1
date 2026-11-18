@@ -32,6 +32,7 @@ PROVIDER = "bundled"
 DEFAULT_PORT = 8477
 START_TIMEOUT = 120
 GENERATE_TIMEOUT = 600
+MODEL_BYTES = 986_048_768
 
 # Qwen2.5-1.5B-Instruct, Q4_K_M: about 1 GB, comfortable on 4 GB of RAM.
 MODEL_FILE = "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
@@ -96,6 +97,28 @@ def model_path() -> Path:
     return models_dir() / MODEL_FILE
 
 
+def server_log_path() -> Path:
+    """Where the server's own output goes, so a failed start can be read."""
+
+    return models_dir() / "llama-server.log"
+
+
+def timeout_seconds() -> int:
+    """How long one planning call may take. A slow CPU needs more."""
+
+    raw = os.environ.get("OFFICE_AGENT_BUNDLED_TIMEOUT", "").strip()
+
+    if not raw:
+        return GENERATE_TIMEOUT
+
+    try:
+        value = int(raw)
+    except ValueError:
+        return GENERATE_TIMEOUT
+
+    return value if value > 0 else GENERATE_TIMEOUT
+
+
 def find_server() -> str | None:
     """The llama-server binary: an explicit path first, then the PATH."""
 
@@ -132,6 +155,16 @@ def ensure_model(
         target.unlink()
 
     target.parent.mkdir(parents=True, exist_ok=True)
+
+    free = shutil.disk_usage(target.parent).free
+
+    if free < MODEL_BYTES:
+        raise BundledError(
+            f"The offline model needs about "
+            f"{MODEL_BYTES // (1024 * 1024)} MB and that folder has "
+            f"{free // (1024 * 1024)} MB free. Free some space, or point "
+            f"OFFICE_AGENT_MODELS at another disk."
+        )
 
     temporary = target.with_name(target.name + ".part")
 
@@ -247,11 +280,18 @@ class BundledServer:
 
         model = ensure_model()
 
+        # The server's own output is the only record of why it refused to
+        # start, so it is kept beside the model rather than discarded.
+        log = server_log_path().open("a", encoding="utf-8")
+
         self.process = subprocess.Popen(
             server_command(server, model, self.port),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
         )
+
+        log.close()
 
         atexit.register(self.stop)
 
@@ -294,6 +334,7 @@ class BundledServer:
             self.process.wait(timeout=10)
         except subprocess.TimeoutExpired:
             self.process.kill()
+            self.process.wait(timeout=10)
 
 
 _server: BundledServer | None = None
@@ -329,7 +370,7 @@ def create_client():
         base_url=server.base_url,
         api_key="local",
         model="bundled",
-        timeout=GENERATE_TIMEOUT,
+        timeout=timeout_seconds(),
         max_attempts=1,
     )
 
