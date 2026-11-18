@@ -520,7 +520,7 @@ by every run — red or green:
 | `docs/render-linux.txt` | the Linux job, after the optional window render |
 
 Each shows the totals, the skip reasons, any failing test names, and how many
-of the 16 window tests actually ran — the line that says whether the GUI was
+of the 17 window tests actually ran — the line that says whether the GUI was
 really built or quietly skipped. They come from `scripts/test_summary.py`,
 which runs the same suite and can be used locally:
 

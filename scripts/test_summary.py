@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import faulthandler
 import os
 import platform
 import sys
@@ -25,11 +26,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+# A Tk thread abort kills the interpreter without a traceback. Enabling this
+# makes the abort print every thread's stack instead of one bare Tcl line,
+# so the CI log names what was running on the offending thread.
+faulthandler.enable(all_threads=True)
+
 sys.path.insert(0, str(ROOT))
 
 # Tests that need a window: every one of them calls unavailable_gui() when
 # Tk or a display is missing, so counting them is what shows the GUI was
-# really built. Both markers must keep matching: 16 tests in total.
+# really built. Both markers must keep matching: 17 tests in total.
 WINDOW_MARKERS = ("GuiWindowTests", "test_gui_window_class_exists")
 
 # Keep the file short: name a few, count the rest.

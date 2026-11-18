@@ -8,7 +8,9 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import tkinter as tk
+from functools import partial
 from pathlib import Path
 from tkinter import filedialog, font as tkfont, ttk
 
@@ -96,6 +98,91 @@ def example_dir() -> Path:
     return _bundle_root() / "examples" / "sales-pack"
 
 
+# ----------------------------------------------------------------------
+# Work that runs off the Tk thread
+#
+# A thread releases its target on the thread itself when it ends, so a
+# target bound to the window would let a worker drop the last reference to
+# it. Tk would then delete its interpreter on that thread, and the process
+# aborts with "Tcl_AsyncDelete: async handler deleted by the wrong thread".
+# These entry points therefore take plain data and the queue, never a
+# widget, a variable or the window.
+# ----------------------------------------------------------------------
+
+
+def _post_connection(messages: queue.Queue, values: dict[str, str]) -> None:
+    check = test_ai_connection(values)
+
+    messages.put(
+        ("ai_ok" if check.ok else "ai_fail", check.summary, None)
+    )
+
+
+def _post_run(messages: queue.Queue, instruction: Path) -> None:
+    # A saved plan runs first, then a job spec written into the brief,
+    # then the model when one is configured.
+    messages.put(run_instruction(instruction))
+
+
+def _post_plan(messages: queue.Queue, instruction: Path) -> None:
+    """Plan only, so the window can show the steps first."""
+
+    try:
+        runtime, kind, payload = plan_instruction(instruction)
+    except Exception as exc:  # never leave the window waiting
+        messages.put(("error", exc, None))
+        return
+
+    if kind == "plan" and runtime is not None:
+        messages.put(("plan", (runtime, payload), None))
+        return
+
+    messages.put((kind, payload, None))
+
+
+def _post_execution(
+    messages: queue.Queue,
+    runtime,
+    plan,
+    cancel: threading.Event | None,
+) -> None:
+    messages.put(
+        execute_plan(
+            runtime,
+            plan,
+            progress=partial(_post_progress, messages),
+            cancel=cancel,
+        )
+    )
+
+
+def _post_progress(
+    messages: queue.Queue, done: int, total: int, label: str
+) -> None:
+    """Called on the worker thread; the window draws it when polled."""
+
+    messages.put(("progress", (done, total), label))
+
+
+def _post_chat_plan(
+    messages: queue.Queue,
+    instruction: Path,
+    reply: str,
+    token: int,
+) -> None:
+    try:
+        runtime, kind, payload = plan_from_reply(instruction, reply)
+    except Exception as exc:  # never leave the window waiting
+        messages.put(("chat_error", (exc, token), None))
+        return
+
+    if kind == "plan":
+        messages.put(("chat_plan", (runtime, payload, token), None))
+        return
+
+    messages.put(("chat_error", (payload, token), None))
+
+
 class OfficeAgentWindow:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
@@ -124,10 +211,12 @@ class OfficeAgentWindow:
 
         self.recent_paths: list[str] = remembered_recent()
 
-        # The thread doing work right now. Kept so it can be joined before
-        # the window (and its Tk objects) goes away: a worker that outlives
-        # Tk can collect it on the wrong thread and abort the process.
+        # The newest worker, for callers that watch one run. Every worker
+        # is kept in workers so close() can join all of them, not only the
+        # latest: a thread that outlives Tk can still be holding the window.
         self.worker: threading.Thread | None = None
+        self.workers: set[threading.Thread] = set()
+        self.closed = False
 
         self.instruction_var = tk.StringVar()
         self.output_var = tk.StringVar()
@@ -903,19 +992,7 @@ class OfficeAgentWindow:
         self.test_button.configure(state="disabled")
         self.ai_status_var.set(text(self.language, "testing"))
 
-        self.worker = threading.Thread(
-            target=self._test_ai,
-            args=(values,),
-            daemon=True,
-        )
-        self.worker.start()
-
-    def _test_ai(self, values: dict[str, str]) -> None:
-        check = test_ai_connection(values)
-
-        self.messages.put(
-            ("ai_ok" if check.ok else "ai_fail", check.summary, None)
-        )
+        self._start_worker(_post_connection, self.messages, values)
 
     # ------------------------------------------------------------------
     # Running
@@ -975,49 +1052,9 @@ class OfficeAgentWindow:
         except Exception:
             pass
 
-        target = self._work_plan if self.review_var.get() else self._work
+        target = _post_plan if self.review_var.get() else _post_run
 
-        self.worker = threading.Thread(
-            target=target,
-            args=(instruction,),
-            daemon=True,
-        )
-        self.worker.start()
-
-    def _work(self, instruction: Path) -> None:
-        # A saved plan runs first, then a job spec written into the brief,
-        # then the model when one is configured.
-        self.messages.put(run_instruction(instruction))
-
-    def _work_plan(self, instruction: Path) -> None:
-        """Plan only, so the window can show the steps first."""
-
-        try:
-            runtime, kind, payload = plan_instruction(instruction)
-        except Exception as exc:  # never leave the window waiting
-            self.messages.put(("error", exc, None))
-            return
-
-        if kind == "plan" and runtime is not None:
-            self.messages.put(("plan", (runtime, payload), None))
-            return
-
-        self.messages.put((kind, payload, None))
-
-    def _work_execute(self, runtime, plan) -> None:
-        self.messages.put(
-            execute_plan(
-                runtime,
-                plan,
-                progress=self._progress,
-                cancel=self.cancel,
-            )
-        )
-
-    def _progress(self, done: int, total: int, label: str) -> None:
-        """Called on the worker thread; the window draws it when polled."""
-
-        self.messages.put(("progress", (done, total), label))
+        self._start_worker(target, self.messages, instruction)
 
     def stop_job(self) -> None:
         """Stop before the next step; the current one is allowed to finish."""
@@ -1036,6 +1073,38 @@ class OfficeAgentWindow:
             save_review(bool(self.review_var.get()))
         except Exception:
             pass
+
+    def _start_worker(self, target, *args) -> None:
+        """Run one job off the Tk thread, which keeps only plain data."""
+
+        self.workers = {t for t in self.workers if t.is_alive()}
+
+        worker = threading.Thread(target=target, args=args, daemon=True)
+
+        self.worker = worker
+        self.workers.add(worker)
+
+        worker.start()
+
+    def _join_workers(self, timeout: float = 2.0) -> None:
+        """Wait for the workers before Tk is destroyed.
+
+        They hold no Tk object now, so this is about a tidy teardown rather
+        than a crash, but a worker still running while the next window is
+        built makes the tests needlessly racy.
+        """
+
+        deadline = time.monotonic() + timeout
+
+        for worker in list(self.workers):
+            remaining = deadline - time.monotonic()
+
+            if remaining <= 0.0:
+                break
+
+            worker.join(remaining)
+
+        self.workers.clear()
 
     def _poll(self) -> None:
         try:
@@ -1709,34 +1778,13 @@ class OfficeAgentWindow:
         self._set_running(True)
         self._set_status(text(self.language, "chat_reading"), MUTED)
 
-        self.worker = threading.Thread(
-            target=self._work_chat_plan,
-            args=(instruction, reply, self.chat_job),
-            daemon=True,
+        self._start_worker(
+            _post_chat_plan,
+            self.messages,
+            instruction,
+            reply,
+            self.chat_job,
         )
-        self.worker.start()
-
-    def _work_chat_plan(
-        self,
-        instruction: Path,
-        reply: str,
-        token: int,
-    ) -> None:
-        try:
-            runtime, kind, payload = plan_from_reply(
-                instruction, reply
-            )
-        except Exception as exc:  # never leave the window waiting
-            self.messages.put(("chat_error", (exc, token), None))
-            return
-
-        if kind == "plan":
-            self.messages.put(
-                ("chat_plan", (runtime, payload, token), None)
-            )
-            return
-
-        self.messages.put(("chat_error", (payload, token), None))
 
     # ------------------------------------------------------------------
     # Plan preview
@@ -1862,12 +1910,13 @@ class OfficeAgentWindow:
 
         self.cancel = threading.Event()
 
-        self.worker = threading.Thread(
-            target=self._work_execute,
-            args=(runtime, plan),
-            daemon=True,
+        self._start_worker(
+            _post_execution,
+            self.messages,
+            runtime,
+            plan,
+            self.cancel,
         )
-        self.worker.start()
 
     def _dismiss_plan(self, window) -> None:
         """Cancelling the preview ends the run: nothing was written."""
@@ -1884,16 +1933,15 @@ class OfficeAgentWindow:
         self._set_status(text(self.language, "ready"), MUTED)
 
     def close(self) -> None:
-        """Stop the worker and polling before the widgets disappear."""
+        """Stop the workers and polling before the widgets disappear."""
 
+        if self.closed:
+            return
+
+        self.closed = True
         self.running = False
 
-        worker = self.worker
-
-        if worker is not None and worker.is_alive():
-            # It only posts to a queue, so it can end now rather than
-            # holding a reference to this window into Tk teardown.
-            worker.join(2.0)
+        self._join_workers()
 
         try:
             self._persist_ai()
@@ -1934,6 +1982,11 @@ class OfficeAgentWindow:
             self.root.destroy()
         except tk.TclError:
             pass  # already gone
+
+        # Nothing may reach Tk through the window once the interpreter is
+        # gone: a reference dropped later on another thread would delete it
+        # there and abort the process.
+        self.root = None
 
     def _release_tk_objects(self) -> None:
         """Drop Tk variables and images while the interpreter still lives.

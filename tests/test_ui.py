@@ -4,6 +4,8 @@ import importlib.util
 import io
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -1380,6 +1382,58 @@ class GuiWindowTests(unittest.TestCase):
         self.window.test_connection()
 
         return self._wait_for_run(timeout)
+
+    def test_a_worker_outliving_the_window_does_not_abort_the_process(self):
+        """Teardown must not leave Tk reachable from a worker thread.
+
+        A thread releases its target on the thread itself, so a target
+        bound to the window let a worker that outlived close() drop the
+        last reference to Tk. Tk then deleted its interpreter on that
+        thread and the process aborted with "Tcl_AsyncDelete: async
+        handler deleted by the wrong thread", which is what killed the
+        Linux window job. This runs that teardown in a child process,
+        where an abort cannot take the suite down with it.
+        """
+
+        script = "\n".join(
+            [
+                "import gc, time, tkinter as tk",
+                "import gui",
+                # A connection test slower than close() is willing to wait.
+                "gui.test_ai_connection = lambda values: (",
+                "    time.sleep(2.5),",
+                "    gui.ai_config.ConnectionCheck(ok=True, detail='OK'),",
+                ")[1]",
+                "root = tk.Tk()",
+                "window = gui.OfficeAgentWindow(root)",
+                "window.provider_var.set('OpenAI')",
+                "window.on_provider_change()",
+                "window.model_var.set('gpt-4o-mini')",
+                "window.api_key_var.set('test-key')",
+                "window.test_connection()",
+                "worker = window.worker",
+                "window.close()",
+                "del window, root",
+                "gc.collect()",
+                "worker.join(10)",
+                "print('survived')",
+            ]
+        )
+
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=str(Path(__file__).resolve().parent.parent),
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+
+        self.assertEqual(
+            completed.returncode,
+            0,
+            completed.stderr or completed.stdout,
+        )
+        self.assertIn("survived", completed.stdout)
 
     def test_connection_button_reports_a_working_reply(self):
         self._use_openai()
