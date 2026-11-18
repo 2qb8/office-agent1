@@ -71,6 +71,28 @@ honest summary is unchanged: about one brief in five comes out right at these
 sizes, and the validator's job is to make the failures cheap to read, not to
 make the models right.
 
+## Prompt rules for the two misreadings
+
+Both failures above are in the brief, not the format, so the prompt now says
+what "total per client" and "the contacts with an email" mean, and names the
+near-miss to avoid (one row per group; `op="empty"`). Re-run on just those
+two briefs, both models, `--repair` on:
+
+| model | case | before | after |
+| --- | --- | --- | --- |
+| 3B | invoice totals by client | wrong (unsorted) | **right**: filter → aggregate → sort, 220 s |
+| 3B | clean the contact list | wrong (inverted filter) | **right**: `not_empty` filter, 145 s |
+| 1.5B | invoice totals by client | wrong (last invoice per client) | no output: three runs, three different failures (failed step; forward reference; wrong totals from filter → sort → select) |
+| 1.5B | clean the contact list | rejected, `excel.filter` | rejected, `text.read` used as a tool name |
+
+At 3B the rules did what they were written to do, on both briefs, and the
+invoice plan now goes through `table.aggregate` rather than around it. At
+1.5B nothing improved: three repeats of the invoice brief produced no
+correct plan, and the failure moved from "wrong totals" to "no aggregate at
+all". Two samples cannot tell a regression from noise, but the 1.5B model
+was never right on that brief, so there is nothing to lose by keeping rules
+that the recommended 3B model reads correctly.
+
 ## Reproducing
 
 llama.cpp from conda-forge (`llama-server`), both models downloaded and
