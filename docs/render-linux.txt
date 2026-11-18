@@ -1,1 +1,1 @@
-Window render (Linux): not attempted — the render step ended as skipped at 97f2227, so the run did not get that far. Nothing was drawn and nothing is claimed about the picture.
+Window render (Linux): not attempted — the render step ended as skipped at eb9f4af, so the run did not get that far. Nothing was drawn and nothing is claimed about the picture.
