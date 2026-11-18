@@ -1,16 +1,14 @@
 Only present while the last Linux run failed; CI removes it
 once the run is green again. No sign-in needed to read this.
 
-Run:    https://github.com/2qb8/office-agent1/actions/runs/44218615059
-Commit: 97f2227254d2bacf93e4f4aed28aed1fb1512e1c
+Run:    https://github.com/2qb8/office-agent1/actions/runs/44220783947
+Commit: eb9f4af30010211b887027886694098e33201e69
 
 Step outcomes:
   tests=failure
   render=skipped
 
 Output (tail):
-test_word_read_table (tests.test_actions.WordActionTests.test_word_read_table) ... ok
-test_word_replace_text (tests.test_actions.WordActionTests.test_word_replace_text) ... ok
 test_word_set_metadata (tests.test_actions.WordActionTests.test_word_set_metadata) ... ok
 test_word_verify_document (tests.test_actions.WordActionTests.test_word_verify_document) ... ok
 test_connection_failure_is_reported (tests.test_ai.AiConfigTests.test_connection_failure_is_reported) ... ok
@@ -63,15 +61,15 @@ test_no_workbook_is_not_a_pass (tests.test_bundled_eval.InvoiceCheckTests.test_n
 test_one_row_per_client_is_caught (tests.test_bundled_eval.InvoiceCheckTests.test_one_row_per_client_is_caught) ... ok
 test_the_right_totals_pass (tests.test_bundled_eval.InvoiceCheckTests.test_the_right_totals_pass) ... ok
 test_the_wrong_order_is_caught (tests.test_bundled_eval.InvoiceCheckTests.test_the_wrong_order_is_caught) ... ok
-test_a_pasted_plan_is_validated_kept_and_run (tests.test_chatplan.PasteTests.test_a_pasted_plan_is_validated_kept_and_run) ... 2026-11-18T01:49:22+00:00  FILES         Profiling the work packet
-2026-11-18T01:49:22+00:00  FILES         Profiled 1 packet files (321 characters): inputs/sales.xlsx
-2026-11-18T01:49:22+00:00  PLANNER       Saved the plan to plan.json
+test_a_pasted_plan_is_validated_kept_and_run (tests.test_chatplan.PasteTests.test_a_pasted_plan_is_validated_kept_and_run) ... 2026-11-18T02:07:18+00:00  FILES         Profiling the work packet
+2026-11-18T02:07:18+00:00  FILES         Profiled 1 packet files (321 characters): inputs/sales.xlsx
+2026-11-18T02:07:18+00:00  PLANNER       Saved the plan to plan.json
 ok
 test_an_invalid_pasted_plan_comes_back_with_the_reason (tests.test_chatplan.PasteTests.test_an_invalid_pasted_plan_comes_back_with_the_reason) ... ok
 test_junk_in_the_box_is_not_a_crash (tests.test_chatplan.PasteTests.test_junk_in_the_box_is_not_a_crash) ... ok
-test_the_saved_chat_plan_runs_again_without_any_model (tests.test_chatplan.PasteTests.test_the_saved_chat_plan_runs_again_without_any_model) ... 2026-11-18T01:49:22+00:00  FILES         Profiling the work packet
-2026-11-18T01:49:22+00:00  FILES         Profiled 1 packet files (321 characters): inputs/sales.xlsx
-2026-11-18T01:49:22+00:00  PLANNER       Saved the plan to plan.json
+test_the_saved_chat_plan_runs_again_without_any_model (tests.test_chatplan.PasteTests.test_the_saved_chat_plan_runs_again_without_any_model) ... 2026-11-18T02:07:18+00:00  FILES         Profiling the work packet
+2026-11-18T02:07:18+00:00  FILES         Profiled 1 packet files (321 characters): inputs/sales.xlsx
+2026-11-18T02:07:18+00:00  PLANNER       Saved the plan to plan.json
 ok
 test_a_bare_json_reply_becomes_a_plan (tests.test_chatplan.ReplyTests.test_a_bare_json_reply_becomes_a_plan) ... ok
 test_a_fenced_reply_with_prose_becomes_a_plan (tests.test_chatplan.ReplyTests.test_a_fenced_reply_with_prose_becomes_a_plan) ... ok
@@ -80,13 +78,13 @@ test_a_reply_that_is_not_a_plan_is_rejected (tests.test_chatplan.ReplyTests.test
 test_an_empty_reply_explains_itself (tests.test_chatplan.ReplyTests.test_an_empty_reply_explains_itself) ... ok
 test_every_registered_action_reaches_the_chatbot (tests.test_chatplan.RequestTests.test_every_registered_action_reaches_the_chatbot) ... ok
 test_the_request_carries_the_brief_and_the_packet (tests.test_chatplan.RequestTests.test_the_request_carries_the_brief_and_the_packet) ... ok
-test_the_request_is_saved_beside_the_brief (tests.test_chatplan.RequestTests.test_the_request_is_saved_beside_the_brief) ... 2026-11-18T01:49:22+00:00  INSTRUCTION   Reading instruction.docx
-2026-11-18T01:49:22+00:00  INSTRUCTION   Loaded 23 words, 154 characters
-2026-11-18T01:49:22+00:00  FILES         Profiling the work packet
-2026-11-18T01:49:22+00:00  FILES         Profiled 1 packet files (321 characters): inputs/sales.xlsx
-2026-11-18T01:49:22+00:00  FILES         Profiling the work packet
-2026-11-18T01:49:22+00:00  INSTRUCTION   Using instruction.docx as the brief; the rest of the packet: plan-request.md
-2026-11-18T01:49:22+00:00  FILES         Profiled 1 packet files (321 characters): inputs/sales.xlsx
+test_the_request_is_saved_beside_the_brief (tests.test_chatplan.RequestTests.test_the_request_is_saved_beside_the_brief) ... 2026-11-18T02:07:18+00:00  INSTRUCTION   Reading instruction.docx
+2026-11-18T02:07:18+00:00  INSTRUCTION   Loaded 23 words, 154 characters
+2026-11-18T02:07:18+00:00  FILES         Profiling the work packet
+2026-11-18T02:07:18+00:00  FILES         Profiled 1 packet files (321 characters): inputs/sales.xlsx
+2026-11-18T02:07:18+00:00  FILES         Profiling the work packet
+2026-11-18T02:07:18+00:00  INSTRUCTION   Using instruction.docx as the brief; the rest of the packet: plan-request.md
+2026-11-18T02:07:18+00:00  FILES         Profiled 1 packet files (321 characters): inputs/sales.xlsx
 ok
 test_bare_job_directory_is_a_run (tests.test_cli.CliTests.test_bare_job_directory_is_a_run) ... ok
 test_missing_job_directory_reports_failure (tests.test_cli.CliTests.test_missing_job_directory_reports_failure) ... ok
@@ -97,9 +95,9 @@ test_a_folder_with_no_document_still_explains_itself (tests.test_packet.BriefCho
 test_a_single_document_is_the_brief (tests.test_packet.BriefChoiceTests.test_a_single_document_is_the_brief) ... ok
 test_the_choice_is_stable (tests.test_packet.BriefChoiceTests.test_the_choice_is_stable) ... ok
 test_the_file_named_like_a_task_wins (tests.test_packet.BriefChoiceTests.test_the_file_named_like_a_task_wins) ... ok
-test_the_rest_of_the_loose_files_are_packet_content (tests.test_packet.BriefChoiceTests.test_the_rest_of_the_loose_files_are_packet_content) ... 2026-11-18T01:49:22+00:00  INSTRUCTION   Using instruction.docx as the brief; the rest of the packet: notes.docx
-2026-11-18T01:49:22+00:00  FILES         Profiling the work packet
-2026-11-18T01:49:22+00:00  FILES         Profiled 2 packet files (581 characters): budget.xlsx, notes.docx
+test_the_rest_of_the_loose_files_are_packet_content (tests.test_packet.BriefChoiceTests.test_the_rest_of_the_loose_files_are_packet_content) ... 2026-11-18T02:07:19+00:00  INSTRUCTION   Using instruction.docx as the brief; the rest of the packet: notes.docx
+2026-11-18T02:07:19+00:00  FILES         Profiling the work packet
+2026-11-18T02:07:19+00:00  FILES         Profiled 2 packet files (581 characters): budget.xlsx, notes.docx
 ok
 test_without_a_conventional_name_the_longest_document_wins (tests.test_packet.BriefChoiceTests.test_without_a_conventional_name_the_longest_document_wins) ... ok
 test_a_copy_cannot_overwrite_the_original (tests.test_packet.WorkOnCopyTests.test_a_copy_cannot_overwrite_the_original) ... ok
@@ -110,7 +108,9 @@ test_the_tool_copies_and_leaves_the_source_alone (tests.test_packet.WorkOnCopyTe
 test_every_registered_action_is_in_the_prompt (tests.test_planner_prompt.PlannerPromptTests.test_every_registered_action_is_in_the_prompt) ... ok
 test_prompt_advertises_no_missing_action (tests.test_planner_prompt.PlannerPromptTests.test_prompt_advertises_no_missing_action) ... ok
 test_the_prompt_asks_for_the_instruction_language (tests.test_planner_prompt.PlannerPromptTests.test_the_prompt_asks_for_the_instruction_language) ... ok
+test_the_prompt_keeps_the_rows_that_have_a_value (tests.test_planner_prompt.PlannerPromptTests.test_the_prompt_keeps_the_rows_that_have_a_value) ... ok
 test_the_prompt_plans_a_prose_brief_rather_than_a_spec (tests.test_planner_prompt.PlannerPromptTests.test_the_prompt_plans_a_prose_brief_rather_than_a_spec) ... ok
+test_the_prompt_says_a_total_adds_every_row (tests.test_planner_prompt.PlannerPromptTests.test_the_prompt_says_a_total_adds_every_row) ... ok
 test_a_prose_brief_is_planned_from_the_packet_profile (tests.test_profile.BriefPlanningTests.test_a_prose_brief_is_planned_from_the_packet_profile) ... ok
 test_a_saved_plan_runs_without_asking_the_model (tests.test_profile.BriefPlanningTests.test_a_saved_plan_runs_without_asking_the_model) ... ok
 test_a_spec_in_the_brief_still_wins_without_a_model (tests.test_profile.BriefPlanningTests.test_a_spec_in_the_brief_still_wins_without_a_model) ... ok
@@ -186,25 +186,25 @@ test_spec_instruction_never_calls_the_model (tests.test_ui.DesktopRunPathTests.t
 test_http_status_with_the_provider_message (tests.test_ui.ErrorLineTests.test_http_status_with_the_provider_message) ... ok
 test_network_failure_without_a_status (tests.test_ui.ErrorLineTests.test_network_failure_without_a_status) ... ok
 test_unusable_reply_keeps_the_provider_message (tests.test_ui.ErrorLineTests.test_unusable_reply_keeps_the_provider_message) ... ok
-test_a_folder_of_loose_documents_is_one_packet (tests.test_ui.ExplicitInstructionTests.test_a_folder_of_loose_documents_is_one_packet) ... 2026-11-18T01:49:26+00:00  INSTRUCTION   Using b.docx as the brief; the rest of the packet: a.docx
+test_a_folder_of_loose_documents_is_one_packet (tests.test_ui.ExplicitInstructionTests.test_a_folder_of_loose_documents_is_one_packet) ... 2026-11-18T02:07:23+00:00  INSTRUCTION   Using b.docx as the brief; the rest of the packet: a.docx
 ok
 test_runs_one_chosen_document_among_several (tests.test_ui.ExplicitInstructionTests.test_runs_one_chosen_document_among_several) ... ok
 test_gui_module_compiles (tests.test_ui.GuiModuleTests.test_gui_module_compiles) ... ok
 test_gui_window_class_exists (tests.test_ui.GuiModuleTests.test_gui_window_class_exists) ... ok
-test_a_rejected_pasted_plan_keeps_the_dialog_and_its_text (tests.test_ui.GuiWindowTests.test_a_rejected_pasted_plan_keeps_the_dialog_and_its_text) ... 2026-11-18T01:49:27+00:00  INSTRUCTION   Reading instruction.docx
-2026-11-18T01:49:27+00:00  INSTRUCTION   Loaded 7 words, 47 characters
-2026-11-18T01:49:27+00:00  FILES         Profiling the work packet
-2026-11-18T01:49:27+00:00  FILES         Profiled 0 packet files (0 characters)
+test_a_rejected_pasted_plan_keeps_the_dialog_and_its_text (tests.test_ui.GuiWindowTests.test_a_rejected_pasted_plan_keeps_the_dialog_and_its_text) ... 2026-11-18T02:07:23+00:00  INSTRUCTION   Reading instruction.docx
+2026-11-18T02:07:23+00:00  INSTRUCTION   Loaded 7 words, 47 characters
+2026-11-18T02:07:23+00:00  FILES         Profiling the work packet
+2026-11-18T02:07:23+00:00  FILES         Profiled 0 packet files (0 characters)
 ok
 test_ai_choice_is_saved_and_becomes_usable (tests.test_ui.GuiWindowTests.test_ai_choice_is_saved_and_becomes_usable) ... ok
 test_ai_section_opens_on_a_preset (tests.test_ui.GuiWindowTests.test_ai_section_opens_on_a_preset) ... ok
-test_an_accepted_pasted_plan_closes_the_dialog_and_previews_it (tests.test_ui.GuiWindowTests.test_an_accepted_pasted_plan_closes_the_dialog_and_previews_it) ... 2026-11-18T01:49:27+00:00  INSTRUCTION   Reading instruction.docx
-2026-11-18T01:49:27+00:00  INSTRUCTION   Loaded 3 words, 30 characters
-2026-11-18T01:49:27+00:00  FILES         Profiling the work packet
-2026-11-18T01:49:27+00:00  FILES         Profiled 0 packet files (0 characters)
-2026-11-18T01:49:27+00:00  FILES         Profiling the work packet
-2026-11-18T01:49:27+00:00  FILES         Profiled 0 packet files (0 characters)
-2026-11-18T01:49:27+00:00  PLANNER       Saved the plan to plan.json
+test_an_accepted_pasted_plan_closes_the_dialog_and_previews_it (tests.test_ui.GuiWindowTests.test_an_accepted_pasted_plan_closes_the_dialog_and_previews_it) ... 2026-11-18T02:07:24+00:00  INSTRUCTION   Reading instruction.docx
+2026-11-18T02:07:24+00:00  INSTRUCTION   Loaded 3 words, 30 characters
+2026-11-18T02:07:24+00:00  FILES         Profiling the work packet
+2026-11-18T02:07:24+00:00  FILES         Profiled 0 packet files (0 characters)
+2026-11-18T02:07:24+00:00  FILES         Profiling the work packet
+2026-11-18T02:07:24+00:00  FILES         Profiled 0 packet files (0 characters)
+2026-11-18T02:07:24+00:00  PLANNER       Saved the plan to plan.json
 ok
 test_connection_button_reports_a_rejected_key (tests.test_ui.GuiWindowTests.test_connection_button_reports_a_rejected_key) ... ok
 test_connection_button_reports_a_working_reply (tests.test_ui.GuiWindowTests.test_connection_button_reports_a_working_reply) ... Tcl_AsyncDelete: async handler deleted by the wrong thread
