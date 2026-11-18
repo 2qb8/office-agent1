@@ -109,6 +109,10 @@ REPAIRABLE_ERRORS = (
     "unknown column",
     "unknown sheet",
     "unknown action",
+    # A tool argument the model invented: table.filter(op="is"),
+    # table.aggregate(op="empty").
+    "unknown comparison",
+    "unknown aggregation",
     "no such action",
     "missing required argument",
     # A tool handed the wrong file type: the plan has the wrong writer.

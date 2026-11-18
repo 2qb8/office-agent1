@@ -281,6 +281,8 @@ class RepairableErrorTests(unittest.TestCase):
             "Unknown action 'text.append_elements'",
             "step 'a' uses unknown action 'word.send_document'",
             "no such action",
+            "Failed to filter rows: Unknown comparison 'is'.",
+            "Failed to aggregate rows: Unknown aggregation 'empty'.",
         ):
             self.assertTrue(_is_repairable(message), message)
 

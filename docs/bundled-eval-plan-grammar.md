@@ -73,6 +73,37 @@ valid operator and costs the rest of the call, so the constraint was removed
 and `arguments` is free-form again. The measured numbers above are from the
 code without it.
 
+## Retrying argument errors
+
+The tool's argument errors were outside `REPAIRABLE_ERRORS`, so a plan that
+failed on `table.filter(op="is")` was refused a revision instead of being
+retried. `unknown comparison` and `unknown aggregation` were added to that
+list (`agent/runtime.py`), which lets the existing loop spend its revisions on
+them. 1.5B, `--repair`, the two briefs that failed this way:
+
+| case | failed step | error | revisions | what the revision did | total |
+| --- | --- | --- | --- | --- | --- |
+| invoice totals by client | `filter_totals` (`table.filter`) | `Unknown comparison 'is'` | 2 | sent the identical operator again, twice | 292s |
+| clean the contact list | – (plan rejected) | no `output_path` on `text.write` | 0 | never executed, so never repaired | 75s |
+
+Neither case produced a file, the same as before the change; the invoice run
+only got about 180s slower. The error text reaches the model — the revision
+prompt carries it word for word — and 1.5B copies its own broken call back
+instead of reading the allowed list. The clean brief failed before execution
+this time, which no repair can reach: a plan the validator rejects is never
+run, and validation failures are still not repairable.
+
+3B does not fail either brief when asked to plan it: with `--repair` it wrote
+the invoice in 202s (aggregate → sort → workbook, totals right) and the
+contact list in 140s (blank emails dropped, CSV right), no revision in
+either, so it never met the error on its own. To test the reading rather than
+the draw, 3B's own clean plan was rerun with a single argument changed,
+`op: not_empty` to `op: is` on the same filter: one revision, 108s, came back
+`is_empty`, and the job finished with the two rows that have an address. Both
+models receive the same revision prompt and the same allowed list in the
+error; the 3B reads it and the 1.5B copies its own call back, so the hints
+stay.
+
 ## What is still the limit
 
 - **The shipped example never passes.** Both models write the DOCX table step
@@ -84,8 +115,9 @@ code without it.
   its content checks now pass when it does produce. The grammar fixed its
   rejections, not its understanding.
 - **Arguments are still the model's.** `op="is"` and `op="empty"` are what
-  the grammar cannot see, and the repair loop does not retry them, because
-  `_is_repairable` only matches the error classes it was taught.
+  the grammar cannot see. The repair loop now retries them (see below);
+  1.5B answers with the same operator again, so the retry buys time and no
+  plan.
 - One sample per brief per model, CPU-only, so timings wander by tens of
   seconds between runs; the valid/output/right columns did not wander across
   the three runs recorded here.
