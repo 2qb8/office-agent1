@@ -1,14 +1,14 @@
 Only present while the last Windows run failed; CI removes it
 once the tests pass again. No sign-in needed to read it.
 
-Run:    https://github.com/2qb8/office-agent1/actions/runs/44212953920
-Commit: fbe3a8a766ce0875c3df622311b8921aafce6c1d
+Run:    https://github.com/2qb8/office-agent1/actions/runs/44218615256
+Commit: 97f2227254d2bacf93e4f4aed28aed1fb1512e1c
 
 Failing tests:
 FAIL: test_the_server_is_told_where_the_model_is (tests.test_bundled.BundledModelTests.test_the_server_is_told_where_the_model_is)
 
 Suite result:
-Ran 261 tests in 16.948s
+Ran 261 tests in 22.906s
 FAILED (failures=1)
 
 Tracebacks:
@@ -25,12 +25,12 @@ AssertionError: '\\models\\m.gguf' != '/models/m.gguf'
 
 
 ----------------------------------------------------------------------
-Ran 261 tests in 16.948s
+Ran 261 tests in 22.906s
 
 FAILED (failures=1)
 
-2026-11-18T01:05:26+00:00  TEXT          Action: write
-2026-11-18T01:05:26+00:00  TEXT          write succeeded: Wrote quick.txt
+2026-11-18T01:49:36+00:00  TEXT          Action: write
+2026-11-18T01:49:36+00:00  TEXT          write succeeded: Wrote quick.txt
 
 Last lines of output:
 test_a_markdown_path_for_the_word_tool_is_rejected (tests.test_validation.ValidationTests.test_a_markdown_path_for_the_word_tool_is_rejected) ... ok
@@ -65,83 +65,83 @@ AssertionError: '\\models\\m.gguf' != '/models/m.gguf'
 
 
 ----------------------------------------------------------------------
-Ran 261 tests in 16.948s
+Ran 261 tests in 22.906s
 
 FAILED (failures=1)
 
-2026-11-18T01:05:26+00:00  TEXT          Action: write
-2026-11-18T01:05:26+00:00  TEXT          write succeeded: Wrote quick.txt
-2026-11-18T01:05:26+00:00  ORCHESTRATOR  Job completed: 20261118_010526_spec-job
-2026-11-18T01:05:26+00:00  EXECUTOR      Execution finished: success
-2026-11-18T01:05:26+00:00  OUTPUT        C:\Users\runneradmin\AppData\Local\Temp\tmpt0cyi5da\spec-job\output\quick.txt
-2026-11-18T01:05:26+00:00  REPORT        Wrote report.json
-2026-11-18T01:05:26+00:00  ORCHESTRATOR  Job finished: success
-2026-11-18T01:05:26+00:00  ORCHESTRATOR  Job started: 20261118_010526_ai-job
-2026-11-18T01:05:26+00:00  INSTRUCTION   Reading instruction.docx
-2026-11-18T01:05:26+00:00  INSTRUCTION   Loaded 6 words, 41 characters
-2026-11-18T01:05:26+00:00  FILES         Profiling the work packet
-2026-11-18T01:05:26+00:00  FILES         Profiled 0 packet files (0 characters)
-2026-11-18T01:05:26+00:00  PLANNER       No saved plan
-2026-11-18T01:05:26+00:00  SPEC          Looking for a job spec in the brief
-2026-11-18T01:05:26+00:00  PLANNER       The brief is prose; planning from it with openai/gpt-4o-mini
-2026-11-18T01:05:26+00:00  PLANNER       Creating plan with LLM
-2026-11-18T01:05:26+00:00  PLANNER       Saved the plan to plan.json
-2026-11-18T01:05:26+00:00  PLANNER       Plan 'write a note' has 1 steps
-2026-11-18T01:05:26+00:00  PLANNER       Step write: text.write
-2026-11-18T01:05:26+00:00  VALIDATOR     Validating generated plan
-2026-11-18T01:05:26+00:00  VALIDATOR     Plan validation passed
-2026-11-18T01:05:26+00:00  EXECUTOR      Starting execution
-2026-11-18T01:05:26+00:00  EXECUTOR      write started: write the note
-2026-11-18T01:05:26+00:00  TEXT          Action: write
-2026-11-18T01:05:26+00:00  TEXT          write succeeded: Wrote ai-note.txt
-2026-11-18T01:05:26+00:00  ORCHESTRATOR  Job completed: 20261118_010526_ai-job
-2026-11-18T01:05:26+00:00  EXECUTOR      Execution finished: success
-2026-11-18T01:05:26+00:00  OUTPUT        C:\Users\runneradmin\AppData\Local\Temp\tmph9vfw0qm\ai-job\output\ai-note.txt
-2026-11-18T01:05:26+00:00  REPORT        Wrote report.json
-2026-11-18T01:05:26+00:00  ORCHESTRATOR  Job finished: success
-2026-11-18T01:05:26+00:00  ORCHESTRATOR  Job started: 20261118_010526_job
-2026-11-18T01:05:26+00:00  INSTRUCTION   Reading instruction.docx
-2026-11-18T01:05:26+00:00  INSTRUCTION   Loaded 37 words, 348 characters
-2026-11-18T01:05:26+00:00  FILES         Profiling the work packet
-2026-11-18T01:05:26+00:00  FILES         Profiled 0 packet files (0 characters)
-2026-11-18T01:05:26+00:00  PLANNER       No saved plan
-2026-11-18T01:05:26+00:00  SPEC          Looking for a job spec in the brief
-2026-11-18T01:05:26+00:00  PLANNER       Saved the plan to plan.json
-2026-11-18T01:05:26+00:00  PLANNER       Plan 'Automation job' has 3 steps
-2026-11-18T01:05:26+00:00  PLANNER       Step first: text.write
-2026-11-18T01:05:26+00:00  PLANNER       Step second: text.write
-2026-11-18T01:05:26+00:00  PLANNER       Step third: text.write
-2026-11-18T01:05:26+00:00  VALIDATOR     Validating generated plan
-2026-11-18T01:05:26+00:00  VALIDATOR     Plan validation passed
-2026-11-18T01:05:26+00:00  ORCHESTRATOR  Job started: 20261118_010526_job
-2026-11-18T01:05:26+00:00  INSTRUCTION   Reading instruction.docx
-2026-11-18T01:05:26+00:00  INSTRUCTION   Loaded 13 words, 122 characters
-2026-11-18T01:05:26+00:00  FILES         Profiling the work packet
-2026-11-18T01:05:26+00:00  FILES         Profiled 0 packet files (0 characters)
-2026-11-18T01:05:26+00:00  PLANNER       No saved plan
-2026-11-18T01:05:26+00:00  SPEC          Looking for a job spec in the brief
-2026-11-18T01:05:26+00:00  PLANNER       Saved the plan to plan.json
-2026-11-18T01:05:26+00:00  PLANNER       Plan 'Automation job' has 1 steps
-2026-11-18T01:05:26+00:00  PLANNER       Step write: text.write
-2026-11-18T01:05:26+00:00  VALIDATOR     Validating generated plan
-2026-11-18T01:05:26+00:00  VALIDATOR     Plan validation passed
-2026-11-18T01:05:27+00:00  EXECUTOR      Starting execution
-2026-11-18T01:05:27+00:00  EXECUTOR      write started: text.write
-2026-11-18T01:05:27+00:00  TEXT          Action: write
-2026-11-18T01:05:27+00:00  TEXT          write succeeded: Wrote quick.txt
-2026-11-18T01:05:27+00:00  ORCHESTRATOR  Job completed: 20261118_010526_job
-2026-11-18T01:05:27+00:00  EXECUTOR      Execution finished: success
-2026-11-18T01:05:27+00:00  OUTPUT        C:\Users\runneradmin\AppData\Local\Temp\tmpv32amo9e\job\output\quick.txt
-2026-11-18T01:05:27+00:00  REPORT        Wrote report.json
-2026-11-18T01:05:27+00:00  ORCHESTRATOR  Job finished: success
+2026-11-18T01:49:36+00:00  TEXT          Action: write
+2026-11-18T01:49:36+00:00  TEXT          write succeeded: Wrote quick.txt
+2026-11-18T01:49:36+00:00  ORCHESTRATOR  Job completed: 20261118_014936_spec-job
+2026-11-18T01:49:36+00:00  EXECUTOR      Execution finished: success
+2026-11-18T01:49:36+00:00  OUTPUT        C:\Users\runneradmin\AppData\Local\Temp\tmpohk0ufab\spec-job\output\quick.txt
+2026-11-18T01:49:36+00:00  REPORT        Wrote report.json
+2026-11-18T01:49:36+00:00  ORCHESTRATOR  Job finished: success
+2026-11-18T01:49:36+00:00  ORCHESTRATOR  Job started: 20261118_014936_ai-job
+2026-11-18T01:49:36+00:00  INSTRUCTION   Reading instruction.docx
+2026-11-18T01:49:36+00:00  INSTRUCTION   Loaded 6 words, 41 characters
+2026-11-18T01:49:36+00:00  FILES         Profiling the work packet
+2026-11-18T01:49:36+00:00  FILES         Profiled 0 packet files (0 characters)
+2026-11-18T01:49:36+00:00  PLANNER       No saved plan
+2026-11-18T01:49:36+00:00  SPEC          Looking for a job spec in the brief
+2026-11-18T01:49:36+00:00  PLANNER       The brief is prose; planning from it with openai/gpt-4o-mini
+2026-11-18T01:49:36+00:00  PLANNER       Creating plan with LLM
+2026-11-18T01:49:36+00:00  PLANNER       Saved the plan to plan.json
+2026-11-18T01:49:36+00:00  PLANNER       Plan 'write a note' has 1 steps
+2026-11-18T01:49:36+00:00  PLANNER       Step write: text.write
+2026-11-18T01:49:36+00:00  VALIDATOR     Validating generated plan
+2026-11-18T01:49:36+00:00  VALIDATOR     Plan validation passed
+2026-11-18T01:49:36+00:00  EXECUTOR      Starting execution
+2026-11-18T01:49:36+00:00  EXECUTOR      write started: write the note
+2026-11-18T01:49:36+00:00  TEXT          Action: write
+2026-11-18T01:49:36+00:00  TEXT          write succeeded: Wrote ai-note.txt
+2026-11-18T01:49:36+00:00  ORCHESTRATOR  Job completed: 20261118_014936_ai-job
+2026-11-18T01:49:36+00:00  EXECUTOR      Execution finished: success
+2026-11-18T01:49:36+00:00  OUTPUT        C:\Users\runneradmin\AppData\Local\Temp\tmps_b5bt31\ai-job\output\ai-note.txt
+2026-11-18T01:49:36+00:00  REPORT        Wrote report.json
+2026-11-18T01:49:36+00:00  ORCHESTRATOR  Job finished: success
+2026-11-18T01:49:36+00:00  ORCHESTRATOR  Job started: 20261118_014936_job
+2026-11-18T01:49:36+00:00  INSTRUCTION   Reading instruction.docx
+2026-11-18T01:49:36+00:00  INSTRUCTION   Loaded 37 words, 348 characters
+2026-11-18T01:49:36+00:00  FILES         Profiling the work packet
+2026-11-18T01:49:36+00:00  FILES         Profiled 0 packet files (0 characters)
+2026-11-18T01:49:36+00:00  PLANNER       No saved plan
+2026-11-18T01:49:36+00:00  SPEC          Looking for a job spec in the brief
+2026-11-18T01:49:36+00:00  PLANNER       Saved the plan to plan.json
+2026-11-18T01:49:36+00:00  PLANNER       Plan 'Automation job' has 3 steps
+2026-11-18T01:49:36+00:00  PLANNER       Step first: text.write
+2026-11-18T01:49:36+00:00  PLANNER       Step second: text.write
+2026-11-18T01:49:36+00:00  PLANNER       Step third: text.write
+2026-11-18T01:49:36+00:00  VALIDATOR     Validating generated plan
+2026-11-18T01:49:36+00:00  VALIDATOR     Plan validation passed
+2026-11-18T01:49:36+00:00  ORCHESTRATOR  Job started: 20261118_014936_job
+2026-11-18T01:49:36+00:00  INSTRUCTION   Reading instruction.docx
+2026-11-18T01:49:36+00:00  INSTRUCTION   Loaded 13 words, 122 characters
+2026-11-18T01:49:36+00:00  FILES         Profiling the work packet
+2026-11-18T01:49:36+00:00  FILES         Profiled 0 packet files (0 characters)
+2026-11-18T01:49:36+00:00  PLANNER       No saved plan
+2026-11-18T01:49:36+00:00  SPEC          Looking for a job spec in the brief
+2026-11-18T01:49:36+00:00  PLANNER       Saved the plan to plan.json
+2026-11-18T01:49:36+00:00  PLANNER       Plan 'Automation job' has 1 steps
+2026-11-18T01:49:36+00:00  PLANNER       Step write: text.write
+2026-11-18T01:49:36+00:00  VALIDATOR     Validating generated plan
+2026-11-18T01:49:36+00:00  VALIDATOR     Plan validation passed
+2026-11-18T01:49:37+00:00  EXECUTOR      Starting execution
+2026-11-18T01:49:37+00:00  EXECUTOR      write started: text.write
+2026-11-18T01:49:37+00:00  TEXT          Action: write
+2026-11-18T01:49:37+00:00  TEXT          write succeeded: Wrote quick.txt
+2026-11-18T01:49:37+00:00  ORCHESTRATOR  Job completed: 20261118_014936_job
+2026-11-18T01:49:37+00:00  EXECUTOR      Execution finished: success
+2026-11-18T01:49:37+00:00  OUTPUT        C:\Users\runneradmin\AppData\Local\Temp\tmpoq8pcj6i\job\output\quick.txt
+2026-11-18T01:49:37+00:00  REPORT        Wrote report.json
+2026-11-18T01:49:37+00:00  ORCHESTRATOR  Job finished: success
 
 Wrote D:\a\office-agent1\office-agent1\docs\tests-windows.txt
 Office Agent test summary — Windows
-Run:     https://github.com/2qb8/office-agent1/actions/runs/44212953920
-Commit:  fbe3a8a (2026-11-18T01:05Z)
+Run:     https://github.com/2qb8/office-agent1/actions/runs/44218615256
+Commit:  97f2227 (2026-11-18T01:49Z)
 Python:  3.12.10, Windows 2025Server
 
-Suite:   261 tests in 16.9s
+Suite:   261 tests in 22.9s
 Pass:    260
 Skip:    0
 Fail:    1
