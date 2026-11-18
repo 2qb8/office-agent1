@@ -100,6 +100,40 @@ class LlmClientTests(unittest.TestCase):
         self.assertEqual(payload["temperature"], 0.25)
         self.assertEqual(payload["max_tokens"], 16)
 
+    def test_a_response_format_is_sent_with_every_request(self):
+        shape = {"type": "json_schema", "json_schema": {"name": "plan"}}
+
+        with mock.patch(
+            "agent.llm.requests.post",
+            return_value=FakeResponse(200, completion("ok")),
+        ) as post:
+            self.client(response_format=shape).generate("Hello")
+
+        self.assertEqual(
+            post.call_args.kwargs["json"]["response_format"], shape
+        )
+
+    def test_a_server_that_refuses_the_schema_is_asked_again_without_it(self):
+        shape = {"type": "json_schema", "json_schema": {"name": "plan"}}
+        client = self.client(response_format=shape)
+
+        refusal = FakeResponse(400, text="response_format is not supported")
+        accepted = FakeResponse(200, completion("plain reply"))
+
+        with mock.patch(
+            "agent.llm.requests.post",
+            side_effect=[refusal, accepted],
+        ) as post:
+            reply = client.generate("Hello")
+
+        self.assertEqual(reply, "plain reply")
+        self.assertEqual(post.call_count, 2)
+
+        retried = post.call_args_list[1].kwargs["json"]
+
+        self.assertNotIn("response_format", retried)
+        self.assertIsNone(client.response_format)
+
     def test_errors_carry_the_status_and_the_provider_message(self):
         with mock.patch(
             "agent.llm.requests.post",

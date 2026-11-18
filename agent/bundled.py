@@ -366,11 +366,16 @@ def create_client():
 
     server = serve()
 
+    # The planner is the only thing this client does, so the plan's JSON
+    # shape travels with every request. llama.cpp turns it into a grammar.
+    from agent.plan_schema import response_format
+
     return OpenAICompatibleLLM(
         base_url=server.base_url,
         api_key="local",
         model="bundled",
         timeout=timeout_seconds(),
+        response_format=response_format(),
         max_attempts=1,
     )
 

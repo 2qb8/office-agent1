@@ -67,6 +67,18 @@ class BundledModelTests(unittest.TestCase):
 
         self.assertIn("OFFICE_AGENT_BUNDLED_MODEL=1", str(caught.exception))
 
+    def test_the_bundled_client_asks_for_the_plan_shape(self):
+        from agent.plan_schema import response_format
+
+        server = mock.Mock(base_url="http://127.0.0.1:1/v1")
+
+        with mock.patch.dict(
+            os.environ, {"OFFICE_AGENT_BUNDLED_MODEL": "1"}
+        ), mock.patch.object(bundled, "serve", return_value=server):
+            client = bundled.create_client()
+
+        self.assertEqual(client.response_format, response_format())
+
     def test_a_first_download_is_kept_and_not_repeated(self):
         path = bundled.ensure_model()
 

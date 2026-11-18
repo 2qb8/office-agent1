@@ -78,6 +78,7 @@ class OpenAICompatibleLLM(LLM):
         model: str,
         timeout: int = 120,
         fallback_models: list[str] | None = None,
+        response_format: dict[str, Any] | None = None,
         max_attempts: int = 3,
         retry_base_seconds: float = 2.0,
         retry_max_seconds: float = 4.0,
@@ -86,6 +87,11 @@ class OpenAICompatibleLLM(LLM):
         self.api_key = api_key
         self.model = model
         self.timeout = timeout
+
+        # Sent with every request when set: a llama.cpp server turns a
+        # JSON schema here into a grammar, so the reply cannot be malformed.
+        # Servers that do not support it are simply not given one.
+        self.response_format = response_format
 
         self.fallback_models = fallback_models or []
 
@@ -136,6 +142,27 @@ class OpenAICompatibleLLM(LLM):
                 )
 
             except LLMError as exc:
+                # A server too old to know ``response_format`` refuses the
+                # request outright. The prompt and the validator still work
+                # there, so ask again without the schema rather than fail.
+                if self.response_format is not None and exc.status == 400:
+                    print(
+                        f"LLM {model}: the server refused the JSON schema "
+                        f"({exc.detail[:120]}); continuing without it"
+                    )
+
+                    self.response_format = None
+
+                    try:
+                        return self._generate_with_model(
+                            model=model,
+                            messages=messages,
+                            temperature=temperature,
+                            max_tokens=max_tokens,
+                        )
+                    except LLMError as plain:
+                        exc = plain
+
                 errors.append(f"{model}: {exc}")
                 failures.append(exc)
 
@@ -175,6 +202,9 @@ class OpenAICompatibleLLM(LLM):
 
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+
+        if self.response_format is not None:
+            payload["response_format"] = self.response_format
 
 
         last_error = "Unknown error"
