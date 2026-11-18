@@ -116,7 +116,10 @@ class BundledModelTests(unittest.TestCase):
         )
 
         self.assertEqual(command[0], "/opt/llama-server")
-        self.assertEqual(command[command.index("--model") + 1], "/models/m.gguf")
+        # Compared as a path: Windows renders the separator differently.
+        self.assertEqual(
+            Path(command[command.index("--model") + 1]), Path("/models/m.gguf")
+        )
         self.assertEqual(command[command.index("--port") + 1], "9123")
         self.assertEqual(command[command.index("--host") + 1], "127.0.0.1")
 

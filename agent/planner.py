@@ -97,6 +97,17 @@ TWO SHAPES THAT GO WRONG
   group_by="Region") returns the headers ["Region", "sum(Revenue)"]. A
   later sort must name "sum(Revenue)", never "Revenue".
 
+READ THE BRIEF PRECISELY
+- "Total per client", "revenue by region", "sum per item": every matching
+  row is added together, so this is table.aggregate(op="sum", column=...,
+  group_by=...). It is not picking one row per group; the last invoice, the
+  newest order or the largest row is a different job and is wrong unless the
+  brief asks for "latest", "last" or "the biggest".
+- "The contacts with an email", "only rows that have a phone": keep the
+  filled-in rows and drop the blanks, which is table.filter(column="Email",
+  op="not_empty"). op="empty" keeps exactly the rows the brief rejects, so
+  never reach for it in that sentence.
+
 EXAMPLE
 
 Brief: "Take inputs/stock.xlsx, sheet Stock. Put every item with fewer than

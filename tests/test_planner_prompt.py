@@ -36,6 +36,17 @@ class PlannerPromptTests(unittest.TestCase):
         self.assertIn("PACKET PROFILE", SYSTEM_PROMPT)
         self.assertNotIn("The instruction may be plain prose", SYSTEM_PROMPT)
 
+    def test_the_prompt_says_a_total_adds_every_row(self):
+        # The 1.5B model summed one invoice per client instead of all of
+        # them; the brief's word "total" is the only cue it has.
+        self.assertIn("every matching", SYSTEM_PROMPT)
+        self.assertIn("is not picking one row per group", SYSTEM_PROMPT)
+
+    def test_the_prompt_keeps_the_rows_that_have_a_value(self):
+        # The 3B model inverted this filter and kept the blank emails.
+        self.assertIn('op="not_empty"', SYSTEM_PROMPT)
+        self.assertIn("never reach for it", SYSTEM_PROMPT)
+
     def test_every_registered_action_is_in_the_prompt(self):
         missing = []
 
