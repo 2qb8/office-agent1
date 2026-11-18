@@ -1,0 +1,211 @@
+Only present while the last Linux run failed; CI removes it
+once the run is green again. No sign-in needed to read this.
+
+Run:    https://github.com/2qb8/office-agent1/actions/runs/44212953858
+Commit: fbe3a8a766ce0875c3df622311b8921aafce6c1d
+
+Step outcomes:
+  tests=failure
+  render=skipped
+
+Output (tail):
+test_word_read_table (tests.test_actions.WordActionTests.test_word_read_table) ... ok
+test_word_replace_text (tests.test_actions.WordActionTests.test_word_replace_text) ... ok
+test_word_set_metadata (tests.test_actions.WordActionTests.test_word_set_metadata) ... ok
+test_word_verify_document (tests.test_actions.WordActionTests.test_word_verify_document) ... ok
+test_connection_failure_is_reported (tests.test_ai.AiConfigTests.test_connection_failure_is_reported) ... ok
+test_describe_never_prints_the_key (tests.test_ai.AiConfigTests.test_describe_never_prints_the_key) ... ok
+test_write_config_merges_and_keeps_other_lines (tests.test_ai.AiConfigTests.test_write_config_merges_and_keeps_other_lines) ... ok
+test_write_config_rejects_line_breaks (tests.test_ai.AiConfigTests.test_write_config_rejects_line_breaks) ... ok
+test_ai_flag_without_configuration_explains_setup (tests.test_ai.AiPlanningTests.test_ai_flag_without_configuration_explains_setup) ... ok
+test_no_ai_flag_requires_a_spec (tests.test_ai.AiPlanningTests.test_no_ai_flag_requires_a_spec) ... ok
+test_prose_instruction_uses_configured_llm (tests.test_ai.AiPlanningTests.test_prose_instruction_uses_configured_llm) ... ok
+test_cloud_setup_reuses_the_environment_key (tests.test_ai.AiSetupTests.test_cloud_setup_reuses_the_environment_key) ... ok
+test_local_setup_does_not_copy_an_ambient_key (tests.test_ai.AiSetupTests.test_local_setup_does_not_copy_an_ambient_key) ... ok
+test_errors_carry_the_status_and_the_provider_message (tests.test_ai.LlmClientTests.test_errors_carry_the_status_and_the_provider_message) ... ok
+test_fallback_model_is_used (tests.test_ai.LlmClientTests.test_fallback_model_is_used) ... ok
+test_local_client_sends_no_authorization_header (tests.test_ai.LlmClientTests.test_local_client_sends_no_authorization_header) ... ok
+test_message_list_is_sent_unchanged (tests.test_ai.LlmClientTests.test_message_list_is_sent_unchanged) ... ok
+test_network_errors_carry_no_status (tests.test_ai.LlmClientTests.test_network_errors_carry_no_status) ... ok
+test_permanent_status_is_not_retried (tests.test_ai.LlmClientTests.test_permanent_status_is_not_retried) ... ok
+test_retryable_status_is_retried (tests.test_ai.LlmClientTests.test_retryable_status_is_retried) ... LLM test-model: HTTP 429 on attempt 1/2; retrying in 0.0s
+ok
+test_sampling_parameters_are_sent (tests.test_ai.LlmClientTests.test_sampling_parameters_are_sent) ... ok
+test_string_prompt_becomes_a_user_message (tests.test_ai.LlmClientTests.test_string_prompt_becomes_a_user_message) ... ok
+test_cloud_provider_without_key_explains_setup (tests.test_ai.LlmFactoryTests.test_cloud_provider_without_key_explains_setup) ... ok
+test_custom_endpoint_overrides_presets (tests.test_ai.LlmFactoryTests.test_custom_endpoint_overrides_presets) ... ok
+test_ollama_preset_needs_no_key (tests.test_ai.LlmFactoryTests.test_ollama_preset_needs_no_key) ... ok
+test_try_create_llm_returns_none_when_unconfigured (tests.test_ai.LlmFactoryTests.test_try_create_llm_returns_none_when_unconfigured) ... ok
+test_a_bad_checksum_leaves_nothing_behind (tests.test_bundled.BundledModelTests.test_a_bad_checksum_leaves_nothing_behind) ... ok
+test_a_corrupt_file_on_disk_is_replaced (tests.test_bundled.BundledModelTests.test_a_corrupt_file_on_disk_is_replaced) ... ok
+test_a_first_download_is_kept_and_not_repeated (tests.test_bundled.BundledModelTests.test_a_first_download_is_kept_and_not_repeated) ... ok
+test_a_full_disk_is_explained_before_any_download (tests.test_bundled.BundledModelTests.test_a_full_disk_is_explained_before_any_download) ... ok
+test_a_missing_binary_is_explained (tests.test_bundled.BundledModelTests.test_a_missing_binary_is_explained) ... ok
+test_an_explicit_binary_path_that_does_not_exist_is_ignored (tests.test_bundled.BundledModelTests.test_an_explicit_binary_path_that_does_not_exist_is_ignored) ... ok
+test_asking_for_it_while_off_says_which_flag (tests.test_bundled.BundledModelTests.test_asking_for_it_while_off_says_which_flag) ... ok
+test_describe_is_one_line (tests.test_bundled.BundledModelTests.test_describe_is_one_line) ... ok
+test_progress_is_reported_with_the_total (tests.test_bundled.BundledModelTests.test_progress_is_reported_with_the_total) ... ok
+test_the_flag_is_off_unless_it_is_set (tests.test_bundled.BundledModelTests.test_the_flag_is_off_unless_it_is_set) ... ok
+test_the_server_is_told_where_the_model_is (tests.test_bundled.BundledModelTests.test_the_server_is_told_where_the_model_is) ... ok
+test_the_server_log_sits_beside_the_model (tests.test_bundled.BundledModelTests.test_the_server_log_sits_beside_the_model) ... ok
+test_the_timeout_can_be_raised_for_slow_machines (tests.test_bundled.BundledModelTests.test_the_timeout_can_be_raised_for_slow_machines) ... ok
+test_a_good_workbook_beside_a_bad_document_still_passes (tests.test_bundled_eval.ContentCheckTests.test_a_good_workbook_beside_a_bad_document_still_passes) ... ok
+test_a_reorder_note_without_the_numbers_is_caught (tests.test_bundled_eval.ContentCheckTests.test_a_reorder_note_without_the_numbers_is_caught) ... ok
+test_a_total_that_ignores_the_threshold_is_caught (tests.test_bundled_eval.ContentCheckTests.test_a_total_that_ignores_the_threshold_is_caught) ... ok
+test_an_unfiltered_list_is_caught (tests.test_bundled_eval.ContentCheckTests.test_an_unfiltered_list_is_caught) ... ok
+test_an_untouched_contact_list_is_caught (tests.test_bundled_eval.ContentCheckTests.test_an_untouched_contact_list_is_caught) ... ok
+test_the_cleaned_contacts_pass (tests.test_bundled_eval.ContentCheckTests.test_the_cleaned_contacts_pass) ... ok
+test_the_filtered_products_pass (tests.test_bundled_eval.ContentCheckTests.test_the_filtered_products_pass) ... ok
+test_the_regional_totals_pass (tests.test_bundled_eval.ContentCheckTests.test_the_regional_totals_pass) ... ok
+test_the_reorder_note_needs_items_and_quantities (tests.test_bundled_eval.ContentCheckTests.test_the_reorder_note_needs_items_and_quantities) ... ok
+test_a_missing_client_is_caught (tests.test_bundled_eval.InvoiceCheckTests.test_a_missing_client_is_caught) ... ok
+test_no_workbook_is_not_a_pass (tests.test_bundled_eval.InvoiceCheckTests.test_no_workbook_is_not_a_pass) ... ok
+test_one_row_per_client_is_caught (tests.test_bundled_eval.InvoiceCheckTests.test_one_row_per_client_is_caught) ... ok
+test_the_right_totals_pass (tests.test_bundled_eval.InvoiceCheckTests.test_the_right_totals_pass) ... ok
+test_the_wrong_order_is_caught (tests.test_bundled_eval.InvoiceCheckTests.test_the_wrong_order_is_caught) ... ok
+test_a_pasted_plan_is_validated_kept_and_run (tests.test_chatplan.PasteTests.test_a_pasted_plan_is_validated_kept_and_run) ... 2026-11-18T01:05:19+00:00  FILES         Profiling the work packet
+2026-11-18T01:05:19+00:00  FILES         Profiled 1 packet files (321 characters): inputs/sales.xlsx
+2026-11-18T01:05:19+00:00  PLANNER       Saved the plan to plan.json
+ok
+test_an_invalid_pasted_plan_comes_back_with_the_reason (tests.test_chatplan.PasteTests.test_an_invalid_pasted_plan_comes_back_with_the_reason) ... ok
+test_junk_in_the_box_is_not_a_crash (tests.test_chatplan.PasteTests.test_junk_in_the_box_is_not_a_crash) ... ok
+test_the_saved_chat_plan_runs_again_without_any_model (tests.test_chatplan.PasteTests.test_the_saved_chat_plan_runs_again_without_any_model) ... 2026-11-18T01:05:19+00:00  FILES         Profiling the work packet
+2026-11-18T01:05:19+00:00  FILES         Profiled 1 packet files (321 characters): inputs/sales.xlsx
+2026-11-18T01:05:19+00:00  PLANNER       Saved the plan to plan.json
+ok
+test_a_bare_json_reply_becomes_a_plan (tests.test_chatplan.ReplyTests.test_a_bare_json_reply_becomes_a_plan) ... ok
+test_a_fenced_reply_with_prose_becomes_a_plan (tests.test_chatplan.ReplyTests.test_a_fenced_reply_with_prose_becomes_a_plan) ... ok
+test_a_plan_with_no_steps_is_rejected (tests.test_chatplan.ReplyTests.test_a_plan_with_no_steps_is_rejected) ... ok
+test_a_reply_that_is_not_a_plan_is_rejected (tests.test_chatplan.ReplyTests.test_a_reply_that_is_not_a_plan_is_rejected) ... ok
+test_an_empty_reply_explains_itself (tests.test_chatplan.ReplyTests.test_an_empty_reply_explains_itself) ... ok
+test_every_registered_action_reaches_the_chatbot (tests.test_chatplan.RequestTests.test_every_registered_action_reaches_the_chatbot) ... ok
+test_the_request_carries_the_brief_and_the_packet (tests.test_chatplan.RequestTests.test_the_request_carries_the_brief_and_the_packet) ... ok
+test_the_request_is_saved_beside_the_brief (tests.test_chatplan.RequestTests.test_the_request_is_saved_beside_the_brief) ... 2026-11-18T01:05:19+00:00  INSTRUCTION   Reading instruction.docx
+2026-11-18T01:05:19+00:00  INSTRUCTION   Loaded 23 words, 154 characters
+2026-11-18T01:05:19+00:00  FILES         Profiling the work packet
+2026-11-18T01:05:19+00:00  FILES         Profiled 1 packet files (321 characters): inputs/sales.xlsx
+2026-11-18T01:05:19+00:00  FILES         Profiling the work packet
+2026-11-18T01:05:19+00:00  INSTRUCTION   Using instruction.docx as the brief; the rest of the packet: plan-request.md
+2026-11-18T01:05:19+00:00  FILES         Profiled 1 packet files (321 characters): inputs/sales.xlsx
+ok
+test_bare_job_directory_is_a_run (tests.test_cli.CliTests.test_bare_job_directory_is_a_run) ... ok
+test_missing_job_directory_reports_failure (tests.test_cli.CliTests.test_missing_job_directory_reports_failure) ... ok
+test_version_flag (tests.test_cli.CliTests.test_version_flag) ... ok
+test_docx_instruction_job_runs_end_to_end (tests.test_job_run.FullJobTests.test_docx_instruction_job_runs_end_to_end) ... ok
+test_a_folder_of_loose_files_is_one_packet (tests.test_packet.BriefChoiceTests.test_a_folder_of_loose_files_is_one_packet) ... ok
+test_a_folder_with_no_document_still_explains_itself (tests.test_packet.BriefChoiceTests.test_a_folder_with_no_document_still_explains_itself) ... ok
+test_a_single_document_is_the_brief (tests.test_packet.BriefChoiceTests.test_a_single_document_is_the_brief) ... ok
+test_the_choice_is_stable (tests.test_packet.BriefChoiceTests.test_the_choice_is_stable) ... ok
+test_the_file_named_like_a_task_wins (tests.test_packet.BriefChoiceTests.test_the_file_named_like_a_task_wins) ... ok
+test_the_rest_of_the_loose_files_are_packet_content (tests.test_packet.BriefChoiceTests.test_the_rest_of_the_loose_files_are_packet_content) ... 2026-11-18T01:05:20+00:00  INSTRUCTION   Using instruction.docx as the brief; the rest of the packet: notes.docx
+2026-11-18T01:05:20+00:00  FILES         Profiling the work packet
+2026-11-18T01:05:20+00:00  FILES         Profiled 2 packet files (581 characters): budget.xlsx, notes.docx
+ok
+test_without_a_conventional_name_the_longest_document_wins (tests.test_packet.BriefChoiceTests.test_without_a_conventional_name_the_longest_document_wins) ... ok
+test_a_copy_cannot_overwrite_the_original (tests.test_packet.WorkOnCopyTests.test_a_copy_cannot_overwrite_the_original) ... ok
+test_a_copy_needs_an_output_path (tests.test_packet.WorkOnCopyTests.test_a_copy_needs_an_output_path) ... ok
+test_a_copy_outside_output_is_rejected (tests.test_packet.WorkOnCopyTests.test_a_copy_outside_output_is_rejected) ... ok
+test_a_plan_edits_the_supplied_file_without_touching_the_input (tests.test_packet.WorkOnCopyTests.test_a_plan_edits_the_supplied_file_without_touching_the_input) ... ok
+test_the_tool_copies_and_leaves_the_source_alone (tests.test_packet.WorkOnCopyTests.test_the_tool_copies_and_leaves_the_source_alone) ... ok
+test_every_registered_action_is_in_the_prompt (tests.test_planner_prompt.PlannerPromptTests.test_every_registered_action_is_in_the_prompt) ... ok
+test_prompt_advertises_no_missing_action (tests.test_planner_prompt.PlannerPromptTests.test_prompt_advertises_no_missing_action) ... ok
+test_the_prompt_asks_for_the_instruction_language (tests.test_planner_prompt.PlannerPromptTests.test_the_prompt_asks_for_the_instruction_language) ... ok
+test_the_prompt_plans_a_prose_brief_rather_than_a_spec (tests.test_planner_prompt.PlannerPromptTests.test_the_prompt_plans_a_prose_brief_rather_than_a_spec) ... ok
+test_a_prose_brief_is_planned_from_the_packet_profile (tests.test_profile.BriefPlanningTests.test_a_prose_brief_is_planned_from_the_packet_profile) ... ok
+test_a_saved_plan_runs_without_asking_the_model (tests.test_profile.BriefPlanningTests.test_a_saved_plan_runs_without_asking_the_model) ... ok
+test_a_spec_in_the_brief_still_wins_without_a_model (tests.test_profile.BriefPlanningTests.test_a_spec_in_the_brief_still_wins_without_a_model) ... ok
+test_an_edited_packet_is_planned_again (tests.test_profile.BriefPlanningTests.test_an_edited_packet_is_planned_again) ... ok
+test_the_model_plan_is_saved_for_the_next_run (tests.test_profile.BriefPlanningTests.test_the_model_plan_is_saved_for_the_next_run) ... ok
+test_a_change_past_the_character_cap_invalidates_the_plan (tests.test_profile.DeepChangeTests.test_a_change_past_the_character_cap_invalidates_the_plan) ... ok
+test_a_change_past_the_sampled_rows_invalidates_the_plan (tests.test_profile.DeepChangeTests.test_a_change_past_the_sampled_rows_invalidates_the_plan) ... ok
+test_an_untouched_packet_still_reuses_its_plan (tests.test_profile.DeepChangeTests.test_an_untouched_packet_still_reuses_its_plan) ... ok
+test_a_saved_plan_round_trips_with_relative_paths (tests.test_profile.PlanFileTests.test_a_saved_plan_round_trips_with_relative_paths) ... ok
+test_an_edited_input_makes_the_saved_plan_stale (tests.test_profile.PlanFileTests.test_an_edited_input_makes_the_saved_plan_stale) ... ok
+test_a_csv_reports_its_header_and_rows (tests.test_profile.ProfileTests.test_a_csv_reports_its_header_and_rows) ... ok
+test_a_file_beside_the_brief_is_packet_content (tests.test_profile.ProfileTests.test_a_file_beside_the_brief_is_packet_content) ... ok
+test_a_large_text_file_is_capped (tests.test_profile.ProfileTests.test_a_large_text_file_is_capped) ... ok
+test_a_word_attachment_reports_its_table (tests.test_profile.ProfileTests.test_a_word_attachment_reports_its_table) ... ok
+test_an_excel_sheet_reports_headers_and_sample_rows (tests.test_profile.ProfileTests.test_an_excel_sheet_reports_headers_and_sample_rows) ... ok
+test_every_file_that_travelled_with_the_brief_is_described (tests.test_profile.ProfileTests.test_every_file_that_travelled_with_the_brief_is_described) ... ok
+test_the_brief_is_read_but_not_listed_as_an_input (tests.test_profile.ProfileTests.test_the_brief_is_read_but_not_listed_as_an_input) ... ok
+test_the_fingerprint_follows_the_packet (tests.test_profile.ProfileTests.test_the_fingerprint_follows_the_packet) ... ok
+test_the_jobs_own_files_are_not_packet_content (tests.test_profile.ProfileTests.test_the_jobs_own_files_are_not_packet_content) ... ok
+test_the_example_runs_from_its_saved_plan (tests.test_profile.ShippedExampleTests.test_the_example_runs_from_its_saved_plan) ... ok
+test_a_file_that_is_not_a_png_is_reported (tests.test_render_report.RenderReportTests.test_a_file_that_is_not_a_png_is_reported) ... ok
+test_a_picture_is_named_with_its_size (tests.test_render_report.RenderReportTests.test_a_picture_is_named_with_its_size) ... ok
+test_a_render_that_ran_and_failed_says_so (tests.test_render_report.RenderReportTests.test_a_render_that_ran_and_failed_says_so) ... ok
+test_a_skipped_render_does_not_blame_the_picture (tests.test_render_report.RenderReportTests.test_a_skipped_render_does_not_blame_the_picture) ... ok
+test_success_without_a_file_is_not_dressed_up (tests.test_render_report.RenderReportTests.test_success_without_a_file_is_not_dressed_up) ... ok
+test_a_rejected_plan_costs_exactly_one_call (tests.test_repair.RejectedPlanTests.test_a_rejected_plan_costs_exactly_one_call) ... ok
+test_a_spec_is_not_revised (tests.test_repair.RejectedPlanTests.test_a_spec_is_not_revised) ... ok
+test_a_broken_file_is_not_a_planning_mistake (tests.test_repair.RepairTests.test_a_broken_file_is_not_a_planning_mistake) ... ok
+test_a_revision_that_rewrites_earlier_steps_is_refused (tests.test_repair.RepairTests.test_a_revision_that_rewrites_earlier_steps_is_refused) ... ok
+test_a_spec_plan_is_never_repaired (tests.test_repair.RepairTests.test_a_spec_plan_is_never_repaired) ... ok
+test_a_step_that_already_ran_is_not_run_again (tests.test_repair.RepairTests.test_a_step_that_already_ran_is_not_run_again) ... ok
+test_a_wrong_sheet_is_repaired_and_the_run_finishes (tests.test_repair.RepairTests.test_a_wrong_sheet_is_repaired_and_the_run_finishes) ... ok
+test_the_run_stops_after_two_repairs (tests.test_repair.RepairTests.test_the_run_stops_after_two_repairs) ... ok
+test_a_disk_error_is_not_repairable (tests.test_repair.RepairableErrorTests.test_a_disk_error_is_not_repairable) ... ok
+test_wrong_file_type_and_unknown_actions_are_repairable (tests.test_repair.RepairableErrorTests.test_wrong_file_type_and_unknown_actions_are_repairable) ... ok
+test_a_date_from_the_plan_is_kept (tests.test_reproducible.ReproducibleTests.test_a_date_from_the_plan_is_kept) ... ok
+test_the_archive_layout_is_stable (tests.test_reproducible.ReproducibleTests.test_the_archive_layout_is_stable) ... ok
+test_two_runs_write_the_same_bytes (tests.test_reproducible.ReproducibleTests.test_two_runs_write_the_same_bytes) ... ok
+test_defaults_and_argument_alias (tests.test_spec.BuildPlanTests.test_defaults_and_argument_alias) ... ok
+test_dependencies_accept_a_string (tests.test_spec.BuildPlanTests.test_dependencies_accept_a_string) ... ok
+test_duplicate_ids_rejected (tests.test_spec.BuildPlanTests.test_duplicate_ids_rejected) ... ok
+test_goal_falls_back_to_title (tests.test_spec.BuildPlanTests.test_goal_falls_back_to_title) ... ok
+test_missing_steps_rejected (tests.test_spec.BuildPlanTests.test_missing_steps_rejected) ... ok
+test_references_and_absolute_paths_are_kept (tests.test_spec.BuildPlanTests.test_references_and_absolute_paths_are_kept) ... ok
+test_step_without_action_rejected (tests.test_spec.BuildPlanTests.test_step_without_action_rejected) ... ok
+test_unknown_dependency_rejected (tests.test_spec.BuildPlanTests.test_unknown_dependency_rejected) ... ok
+test_fenced_yaml_inside_prose (tests.test_spec.ParseSpecTests.test_fenced_yaml_inside_prose) ... ok
+test_json_document (tests.test_spec.ParseSpecTests.test_json_document) ... ok
+test_prose_only_document_is_rejected (tests.test_spec.ParseSpecTests.test_prose_only_document_is_rejected) ... ok
+test_smart_quotes_are_normalized (tests.test_spec.ParseSpecTests.test_smart_quotes_are_normalized) ... ok
+test_whole_document_yaml (tests.test_spec.ParseSpecTests.test_whole_document_yaml) ... ok
+test_a_failing_suite_still_writes_a_summary (tests.test_test_summary.FailingSummaryTests.test_a_failing_suite_still_writes_a_summary) ... ok
+test_the_log_still_looks_like_unittest (tests.test_test_summary.FailingSummaryTests.test_the_log_still_looks_like_unittest)
+The failure-report steps grep this log, so its shape matters. ... ok
+test_a_csv_becomes_headers_and_rows (tests.test_text_table.TextReadTableTests.test_a_csv_becomes_headers_and_rows) ... ok
+test_a_header_row_past_the_end_is_explained (tests.test_text_table.TextReadTableTests.test_a_header_row_past_the_end_is_explained) ... ok
+test_a_missing_file_is_explained (tests.test_text_table.TextReadTableTests.test_a_missing_file_is_explained) ... ok
+test_a_semicolon_file_can_say_so (tests.test_text_table.TextReadTableTests.test_a_semicolon_file_can_say_so) ... ok
+test_a_tsv_uses_tabs_by_default (tests.test_text_table.TextReadTableTests.test_a_tsv_uses_tabs_by_default) ... ok
+test_blank_lines_are_ignored (tests.test_text_table.TextReadTableTests.test_blank_lines_are_ignored) ... ok
+test_the_result_feeds_a_table_step (tests.test_text_table.TextReadTableTests.test_the_result_feeds_a_table_step) ... ok
+test_from_values_strips_whitespace (tests.test_ui.AiEnvironmentTests.test_from_values_strips_whitespace) ... ok
+test_values_reach_the_planner_and_clear_again (tests.test_ui.AiEnvironmentTests.test_values_reach_the_planner_and_clear_again) ... ok
+test_the_factory_refuses_a_client_for_other_settings (tests.test_ui.ConfigCheckingFactoryTests.test_the_factory_refuses_a_client_for_other_settings)
+Without this the window tests could pass on a broken wiring. ... ok
+test_a_rejected_key_reports_the_http_status (tests.test_ui.ConnectionTestTests.test_a_rejected_key_reports_the_http_status) ... ok
+test_a_working_reply_reports_the_model_output (tests.test_ui.ConnectionTestTests.test_a_working_reply_reports_the_model_output) ... ok
+test_an_unreachable_endpoint_reports_the_network_error (tests.test_ui.ConnectionTestTests.test_an_unreachable_endpoint_reports_the_network_error) ... ok
+test_reports_success_and_failure (tests.test_ui.DescribeStateTests.test_reports_success_and_failure) ... ok
+test_prose_instruction_is_planned_by_the_configured_model (tests.test_ui.DesktopRunPathTests.test_prose_instruction_is_planned_by_the_configured_model) ... ok
+test_prose_without_a_provider_reports_the_missing_spec (tests.test_ui.DesktopRunPathTests.test_prose_without_a_provider_reports_the_missing_spec) ... ok
+test_spec_instruction_never_calls_the_model (tests.test_ui.DesktopRunPathTests.test_spec_instruction_never_calls_the_model) ... ok
+test_http_status_with_the_provider_message (tests.test_ui.ErrorLineTests.test_http_status_with_the_provider_message) ... ok
+test_network_failure_without_a_status (tests.test_ui.ErrorLineTests.test_network_failure_without_a_status) ... ok
+test_unusable_reply_keeps_the_provider_message (tests.test_ui.ErrorLineTests.test_unusable_reply_keeps_the_provider_message) ... ok
+test_a_folder_of_loose_documents_is_one_packet (tests.test_ui.ExplicitInstructionTests.test_a_folder_of_loose_documents_is_one_packet) ... 2026-11-18T01:05:24+00:00  INSTRUCTION   Using b.docx as the brief; the rest of the packet: a.docx
+ok
+test_runs_one_chosen_document_among_several (tests.test_ui.ExplicitInstructionTests.test_runs_one_chosen_document_among_several) ... ok
+test_gui_module_compiles (tests.test_ui.GuiModuleTests.test_gui_module_compiles) ... ok
+test_gui_window_class_exists (tests.test_ui.GuiModuleTests.test_gui_window_class_exists) ... ok
+test_a_rejected_pasted_plan_keeps_the_dialog_and_its_text (tests.test_ui.GuiWindowTests.test_a_rejected_pasted_plan_keeps_the_dialog_and_its_text) ... 2026-11-18T01:05:24+00:00  INSTRUCTION   Reading instruction.docx
+2026-11-18T01:05:24+00:00  INSTRUCTION   Loaded 7 words, 47 characters
+2026-11-18T01:05:24+00:00  FILES         Profiling the work packet
+2026-11-18T01:05:24+00:00  FILES         Profiled 0 packet files (0 characters)
+ok
+test_ai_choice_is_saved_and_becomes_usable (tests.test_ui.GuiWindowTests.test_ai_choice_is_saved_and_becomes_usable) ... ok
+test_ai_section_opens_on_a_preset (tests.test_ui.GuiWindowTests.test_ai_section_opens_on_a_preset) ... ok
+test_an_accepted_pasted_plan_closes_the_dialog_and_previews_it (tests.test_ui.GuiWindowTests.test_an_accepted_pasted_plan_closes_the_dialog_and_previews_it) ... 2026-11-18T01:05:24+00:00  INSTRUCTION   Reading instruction.docx
+2026-11-18T01:05:24+00:00  INSTRUCTION   Loaded 3 words, 30 characters
+2026-11-18T01:05:24+00:00  FILES         Profiling the work packet
+2026-11-18T01:05:24+00:00  FILES         Profiled 0 packet files (0 characters)
+2026-11-18T01:05:24+00:00  FILES         Profiling the work packet
+2026-11-18T01:05:25+00:00  FILES         Profiled 0 packet files (0 characters)
+2026-11-18T01:05:25+00:00  PLANNER       Saved the plan to plan.json
+ok
+test_connection_button_reports_a_rejected_key (tests.test_ui.GuiWindowTests.test_connection_button_reports_a_rejected_key) ... ok
+test_connection_button_reports_a_working_reply (tests.test_ui.GuiWindowTests.test_connection_button_reports_a_working_reply) ... Tcl_AsyncDelete: async handler deleted by the wrong thread
+Aborted (core dumped)
