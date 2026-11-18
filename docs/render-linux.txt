@@ -1,1 +1,1 @@
-Window render (Linux): produced window-linux.png, 980x708, 66178 bytes; the render step ended as success at 0fdc239.
+Window render (Linux): not attempted — the render step ended as skipped at fbe3a8a, so the run did not get that far. Nothing was drawn and nothing is claimed about the picture.
