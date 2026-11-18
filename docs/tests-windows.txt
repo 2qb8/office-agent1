@@ -1,16 +1,15 @@
 Office Agent test summary — Windows
-Run:     https://github.com/2qb8/office-agent1/actions/runs/44218615256
-Commit:  97f2227 (2026-11-18T01:49Z)
+Run:     https://github.com/2qb8/office-agent1/actions/runs/44220784097
+Commit:  eb9f4af (2026-11-18T02:07Z)
 Python:  3.12.10, Windows 2025Server
 
-Suite:   261 tests in 22.9s
-Pass:    260
+Suite:   263 tests in 16.3s
+Pass:    263
 Skip:    0
-Fail:    1
+Fail:    0
 Error:   0
 
 Window tests (Tk): 16 of 16 ran, 0 skipped
 Skipped: none
-Failed:  test_the_server_is_told_where_the_model_is
 
-Result:  FAIL
+Result:  PASS
