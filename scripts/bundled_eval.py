@@ -39,24 +39,13 @@ from agent.registry import build_registry  # noqa: E402
 from agent.runtime import AgentRuntime  # noqa: E402
 
 
-# The same quantisation at two sizes, so the comparison is the model and
-# nothing else. Each hash was taken from the Hugging Face file listing.
+# Q4_K_M, the quantisation the app itself downloads. The hash was taken from
+# the Hugging Face file listing.
 MODELS = {
-    "1.5b": {
+    "3b": {
         "file": bundled.MODEL_FILE,
         "url": bundled.MODEL_URL,
         "sha256": bundled.MODEL_SHA256,
-    },
-    "3b": {
-        "file": "Qwen2.5-3B-Instruct-Q4_K_M.gguf",
-        "url": (
-            "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF"
-            "/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf"
-        ),
-        "sha256": (
-            "9c9f56a391a3abbd5b89d0245bf6106081bcc3173"
-            "119d4229235dd9d23253f94"
-        ),
     },
 }
 
@@ -626,8 +615,8 @@ def main() -> int:
     parser.add_argument(
         "--model",
         choices=sorted(MODELS),
-        default="1.5b",
-        help="Which bundled model to test. Default: 1.5b.",
+        default="3b",
+        help="Which bundled model to test. Only 3b is bundled.",
     )
 
     arguments = parser.parse_args()

@@ -12,8 +12,11 @@ really has. Planning and repair both go through that client.
 ```
 OFFICE_AGENT_BUNDLED_MODEL=1 OFFICE_AGENT_MODELS=/tmp/models \
 OFFICE_AGENT_LLAMA_SERVER=/tmp/llama/bin/llama-server \
-  .venv/bin/python scripts/bundled_eval.py --model 1.5b --repair --out /tmp/eval-15.md
+  .venv/bin/python scripts/bundled_eval.py --model 3b --repair --out /tmp/eval-3b.md
 ```
+
+The 1.5B rows below were measured while the app still bundled that model;
+it has since been dropped, and `--model 3b` is the only choice left.
 
 ## 1.5B
 

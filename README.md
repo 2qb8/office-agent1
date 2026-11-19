@@ -664,7 +664,7 @@ python run.py ai test
 ```
 
 The first use checks there is room, then downloads
-`Qwen2.5-1.5B-Instruct-Q4_K_M.gguf` (about 1 GB) into the models folder and
+`Qwen2.5-3B-Instruct-Q4_K_M.gguf` (about 1.9 GB) into the models folder and
 keeps it only if the SHA-256 matches. After that, planning works offline.
 The server's own output goes to `llama-server.log` beside the model, so a
 failed start can be read; `OFFICE_AGENT_BUNDLED_TIMEOUT` (seconds, default
@@ -677,8 +677,7 @@ present, and no invented tool or action. A server too old to know the field
 refuses it once, and the client retries without it. `python scripts/bundled_eval.py` runs the
 shipped example and five ordinary briefs through it and reports whether each
 plan validated, whether it produced a file, and whether the contents match
-the brief; `--model 3b` runs the larger model, `--repair` lets the planner
-correct a failed plan.
+the brief; `--repair` lets the planner correct a failed plan.
 
 ### Check and use
 
@@ -704,13 +703,12 @@ action, a `.md` path handed to the Word writer, a sort on a column the
 aggregate never made), and names the step and the allowed alternatives in the
 message.
 
-What these models can do now, measured on five briefs at 1.5B and 3B
-(`docs/bundled-eval-plan-grammar.md` is the most recent run): with the plan
-grammar enforcing the shape, 3B validates 4 of 5 briefs, produces a file for
-4, and every produced file is right; 1.5B validates 4 of 5 and produces 2,
-both right. The shipped example still never passes at either size — both
-models hand a `.xlsx` path to the Word writer and the validator stops them —
-and a rejected plan is not retried, because both models repeated the same
-mistake when given the correction message. A hosted model is a different story: the message is
+What the bundled model can do now, measured on five briefs with the plan
+grammar enforcing the shape (`docs/bundled-eval-plan-grammar.md`): 3B
+validates 4 of 5 briefs, produces a file for 4, and every produced file is
+right. The shipped example still never passes: the model hands an `.xlsx`
+path to the Word writer and the validator stops it. A rejected plan is not
+retried, because the model repeats the same mistake when given the
+correction message. A hosted model is a different story: the message is
 written to be actionable for anything that can diff an error against an
 allowed list.

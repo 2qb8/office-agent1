@@ -32,16 +32,18 @@ PROVIDER = "bundled"
 DEFAULT_PORT = 8477
 START_TIMEOUT = 120
 GENERATE_TIMEOUT = 600
-MODEL_BYTES = 986_048_768
+MODEL_BYTES = 1_929_903_264
 
-# Qwen2.5-1.5B-Instruct, Q4_K_M: about 1 GB, comfortable on 4 GB of RAM.
-MODEL_FILE = "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
+# Qwen2.5-3B-Instruct, Q4_K_M: about 1.9 GB on disk, comfortable on 8 GB of
+# RAM. The 1.5B model this started with was dropped: it repeats its own
+# mistakes and produces fewer right files.
+MODEL_FILE = "Qwen2.5-3B-Instruct-Q4_K_M.gguf"
 MODEL_URL = (
-    "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF"
-    "/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
+    "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF"
+    "/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf"
 )
 MODEL_SHA256 = (
-    "1adf0b11065d8ad2e8123ea110d1ec956dab4ab038eab665614adba04b6c3370"
+    "9c9f56a391a3abbd5b89d0245bf6106081bcc3173119d4229235dd9d23253f94"
 )
 
 CHUNK = 1024 * 1024
