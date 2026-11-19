@@ -115,6 +115,52 @@ stopped after one revision — two model calls instead of three, same no-file
 ending. The wall clock is not comparable to the 292s above; this run was on a
 faster machine and planned in 33s, 56s in total.
 
+## An order the brief asks for
+
+"Sorted from the largest total down" is a step 3B drops about two times in
+three: the plan aggregates and writes the workbook, the totals are right and
+the order is the source order. A prompt entry for it was written and measured
+first — three invoice runs, one sorted, two not, the same as before — and then
+removed. The plan is now finished after planning instead: when the brief asks
+for an order both ways — "sort"/"order"/"ranked", or "highest first", plus a
+direction word ("largest"/"descending" or "smallest"/"alphabetical") — every
+aggregate that groups rows and is followed by no sort gets a
+`table.sort` naming the column the aggregate produced, with `descending` for
+"largest"/"highest" and without it for "smallest"/"alphabetical". Later steps
+that read the aggregate's rows are pointed at the new step, and the inserted
+step goes through the same validator as the rest of the plan. No model call,
+no repair. An order the brief names without a direction ("sorted by date")
+adds nothing: which column and which way is the model's call, not a guess
+worth inserting.
+
+Three invoice runs on 3B with the check in place: the two that planned a
+grouped aggregate got `sort_aggregate_totals` after `aggregate_totals`
+(`sum(Amount)`, descending) and produced the right file; the third planned
+`table.aggregate` with no `group_by`, so it summed all five invoices into one
+row — a different mistake, where an order does not exist to be added.
+
+## An aggregate that groups nothing
+
+That third plan is the case an inserted step cannot fix, so it goes through
+the repair loop instead. After a run finishes, a `table.aggregate` with no
+`group_by` is checked against the brief: when the brief says "per", "by" or
+"each", one row for the whole table is the wrong shape, and the step is
+recorded as failed with an explicit message — "table.aggregate has no
+group_by, but the brief asks for one row per group … Add group_by naming the
+column to group on". Everything built on that single row is dropped from the
+completed steps, so the revision re-runs the aggregate and the steps after
+it. `no group_by` is in `REPAIRABLE_ERRORS`, which means the loop treats it
+like any other planning mistake: two revisions at most, one model call per
+revision, and a revision that groups nothing again stops after the first
+(`_failed_the_same_way`). No extra model call is spent when the brief asks
+for no groups, and plans that are not model-made are never touched.
+
+"per" and "each" are matched as bare words. "by" only counts when the word
+before it asks for a total — "grouped by", "totals by region", "count by
+status" — so "total the units, signed off by the manager" keeps its one-row
+total instead of spending a repair call on a group the brief never wanted.
+"sorted by date" is read the same way: no grouping.
+
 ## What is still the limit
 
 - **The shipped example never passes.** Both models write the DOCX table step

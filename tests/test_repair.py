@@ -172,6 +172,14 @@ class RepairTestCase(unittest.TestCase):
 
         return runtime, state
 
+    def write_brief(self, text: str) -> None:
+        document = Document()
+
+        for line in text.splitlines():
+            document.add_paragraph(line)
+
+        document.save(self.job / "instruction.docx")
+
     def saved_plan(self) -> dict:
         return json.loads(
             (self.job / "plan.json").read_text(encoding="utf-8")
@@ -179,6 +187,60 @@ class RepairTestCase(unittest.TestCase):
 
     def log(self) -> str:
         return (self.job / "run.log").read_text(encoding="utf-8")
+
+
+GROUPED_BRIEF = (
+    "Total the units per region from inputs/sales.xlsx, worksheet Sales,\n"
+    "and write the totals to output/totals.txt."
+)
+
+
+def aggregate_plan(group_by: bool = True) -> dict:
+    """A plan that sums Units, grouped on request, and writes the totals."""
+
+    arguments = {
+        "headers": "$read.headers",
+        "rows": "$read.rows",
+        "column": "Units",
+        "op": "sum",
+    }
+
+    if group_by:
+        arguments["group_by"] = "Region"
+
+    return {
+        "goal": "Totals per region",
+        "steps": [
+            {
+                "id": "read",
+                "description": "Read the sheet",
+                "tool": "excel",
+                "action": "read_table",
+                "arguments": {
+                    "path": "inputs/sales.xlsx",
+                    "sheet": "Sales",
+                },
+            },
+            {
+                "id": "totals",
+                "description": "Total the units per region",
+                "tool": "table",
+                "action": "aggregate",
+                "arguments": arguments,
+            },
+            {
+                "id": "write",
+                "description": "Write the totals",
+                "tool": "text",
+                "action": "write",
+                "arguments": {
+                    "output_path": "output/totals.txt",
+                    "headers": "$totals.headers",
+                    "rows": "$totals.rows",
+                },
+            },
+        ],
+    }
 
 
 PLAN_WITH_UNKNOWN_ACTION = {
@@ -288,6 +350,90 @@ class RepairableErrorTests(unittest.TestCase):
 
     def test_a_disk_error_is_not_repairable(self):
         self.assertFalse(_is_repairable("No space left on device"))
+
+
+class UngroupedAggregateTests(RepairTestCase):
+    """An aggregate that groups nothing is a plan the brief cannot accept.
+
+    3B planned this on the invoice brief: five rows summed into one, the
+    total right and the table the wrong shape. Inserting a step cannot fix
+    it, so the step is failed with a message and sent to the repair loop.
+    """
+
+    def test_a_grouped_brief_sends_an_ungrouped_aggregate_back(self):
+        self.write_brief(GROUPED_BRIEF)
+
+        llm = ScriptedLLM(
+            aggregate_plan(group_by=False),
+            aggregate_plan(group_by=True),
+        )
+
+        runtime, state = self.run_job(llm)
+
+        self.assertEqual(state.status.value, "success")
+
+        # One plan, one revision.
+        self.assertEqual(len(llm.prompts), 2)
+
+        request = llm.text_at(1)
+
+        self.assertIn("FAILED STEP: totals", request)
+        self.assertIn("no group_by", request)
+        self.assertIn("one row per group", request)
+
+        saved = self.saved_plan()
+
+        self.assertEqual(len(saved["revisions"]), 1)
+        self.assertEqual(saved["revisions"][0]["step"], "totals")
+        self.assertIn("no group_by", saved["revisions"][0]["error"])
+        self.assertEqual(saved["steps"][1]["arguments"]["group_by"], "Region")
+
+        text = (self.job / "output" / "totals.txt").read_text(encoding="utf-8")
+
+        self.assertIn("Region", text)
+        self.assertIn("Repair attempt 1/2", self.log())
+
+    def test_a_brief_that_asks_for_no_groups_is_left_alone(self):
+        llm = ScriptedLLM(aggregate_plan(group_by=False))
+
+        runtime, state = self.run_job(llm)
+
+        self.assertEqual(state.status.value, "success")
+        self.assertEqual(len(llm.prompts), 1)
+        self.assertEqual(self.saved_plan()["revisions"], [])
+        self.assertTrue((self.job / "output" / "totals.txt").is_file())
+
+    def test_a_by_that_is_not_a_grouping_is_left_alone(self):
+        # "signed off by the manager" says nothing about groups: the one-row
+        # total is the plan the brief asked for.
+        self.write_brief(
+            "Sum the units from inputs/sales.xlsx, worksheet Sales, and write\n"
+            "the total to output/totals.txt, signed off by the manager."
+        )
+
+        llm = ScriptedLLM(aggregate_plan(group_by=False))
+
+        runtime, state = self.run_job(llm)
+
+        self.assertEqual(state.status.value, "success")
+        self.assertEqual(len(llm.prompts), 1)
+        self.assertEqual(self.saved_plan()["revisions"], [])
+        self.assertTrue((self.job / "output" / "totals.txt").is_file())
+
+    def test_a_revision_that_groups_nothing_again_stops(self):
+        self.write_brief(GROUPED_BRIEF)
+
+        llm = ScriptedLLM(aggregate_plan(group_by=False))
+
+        runtime, state = self.run_job(llm)
+
+        self.assertEqual(state.status.value, "failed")
+
+        # The revision repeated the ungrouped aggregate, so the second
+        # identical call is not made.
+        self.assertEqual(len(llm.prompts), 2)
+        self.assertEqual(len(self.saved_plan()["revisions"]), 1)
+        self.assertIn("with the same error", self.log())
 
 
 class RepairTests(RepairTestCase):

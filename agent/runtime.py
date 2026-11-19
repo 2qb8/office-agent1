@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -23,11 +24,14 @@ from agent.models import (
     JobInstruction,
     JobPlan,
     JobState,
+    PlanStep,
     StepStatus,
+    ToolResult,
 )
 from agent.planfile import fingerprint, load_plan, save_plan
 from agent.profile import profile_packet
 from agent.registry import ToolRegistry
+from agent.state import save_state
 from agent.spec import (
     SpecError,
     build_plan_from_text,
@@ -115,6 +119,9 @@ REPAIRABLE_ERRORS = (
     "unknown aggregation",
     "no such action",
     "missing required argument",
+    # An aggregate that groups nothing while the brief asks for rows per
+    # group: the tool ran, so only the plan can be wrong.
+    "no group_by",
     # A tool handed the wrong file type: the plan has the wrong writer.
     "expected .xlsx",
     "expected .xlsm",
@@ -158,6 +165,7 @@ class AgentRuntime:
 
         self._profile: dict | None = None
         self._instruction: Path | None = None
+        self._brief: str | None = None
 
         # Where the plan came from, and every correction made to it.
         self.plan_source = "unknown"
@@ -411,6 +419,187 @@ class AgentRuntime:
                 f"Step {step.id}: {step.tool}.{step.action}",
             )
 
+    def _add_requested_order(self, plan: JobPlan, brief: str) -> list[str]:
+        """Add the sort a brief asks for and the model left out.
+
+        "Sorted from the largest total down" is a step a small model drops
+        about two times in three, and a revision usually returns the same
+        plan, so the plan is finished here instead of at planning cost.
+        """
+
+        descending = _requested_order(brief)
+
+        if descending is None:
+            return []
+
+        added: list[str] = []
+        index = 0
+
+        while index < len(plan.steps):
+            step = plan.steps[index]
+
+            index += 1
+
+            if step.tool != "table" or step.action != "aggregate":
+                continue
+
+            if not step.arguments.get("group_by"):
+                # One row, so there is no order to put it in.
+                continue
+
+            produced = _headers_produced(step, {}) or []
+
+            if not produced:
+                continue
+
+            column = produced[-1]
+
+            if _sorts_this(plan, index, step.id, column):
+                continue
+
+            sort_id = _fresh_step_id(plan, f"sort_{step.id}")
+
+            arguments = {
+                "headers": f"${step.id}.headers",
+                "rows": f"${step.id}.rows",
+                "column": column,
+            }
+
+            if descending:
+                arguments["descending"] = True
+
+            plan.steps.insert(
+                index,
+                PlanStep(
+                    id=sort_id,
+                    description=(
+                        f"Sort by {column} from the largest down"
+                        if descending
+                        else f"Sort by {column} from the smallest up"
+                    ),
+                    tool="table",
+                    action="sort",
+                    arguments=arguments,
+                    depends_on=[step.id],
+                ),
+            )
+
+            index += 1
+
+            # Everything that read this aggregate now reads the sorted rows.
+            for later in plan.steps[index:]:
+                later.arguments = _repoint(
+                    later.arguments,
+                    step.id,
+                    sort_id,
+                )
+
+                later.depends_on = [
+                    sort_id if item == step.id else item
+                    for item in later.depends_on
+                ]
+
+            self.logger.log(
+                "PLANNER",
+                f"Added step {sort_id} after {step.id}: the brief asks for "
+                f"an order and nothing sorted '{column}'",
+            )
+
+            added.append(sort_id)
+
+        return added
+
+    def _brief_text(self) -> str:
+        """The brief, read once and kept for the checks made while running."""
+
+        if self._brief is None:
+            self._brief = self.read_instruction().text
+
+        return self._brief
+
+    def _ungrouped_aggregate(
+        self,
+        plan: JobPlan,
+        state: JobState,
+    ) -> PlanStep | None:
+        """The aggregate that groups nothing while the brief asks for groups.
+
+        ``table.aggregate`` without ``group_by`` sums the whole table into
+        one row. When the brief says "per", "by" or "each", that row is
+        the wrong shape, and no amount of reordering can fix it — only a
+        new plan can.
+        """
+
+        if self.plan_source not in {"api", "chat"}:
+            return None
+
+        if state.status is not StepStatus.SUCCESS:
+            return None
+
+        if not _requested_groups(self._brief_text()):
+            return None
+
+        for step in plan.steps:
+            if step.tool != "table" or step.action != "aggregate":
+                continue
+
+            if step.arguments.get("group_by"):
+                continue
+
+            result = state.results.get(step.id)
+
+            if result is None or not result.success:
+                continue
+
+            return step
+
+        return None
+
+    def _fail_ungrouped_aggregate(
+        self,
+        plan: JobPlan,
+        state: JobState,
+        step: PlanStep,
+    ) -> JobState:
+        """Hand an aggregate that groups nothing to the repair loop.
+
+        The tool succeeded, so the only way back to the planner is a
+        recorded failure; everything built on the aggregate's one row is
+        dropped from the completed steps so the revised plan runs it again.
+        """
+
+        error = (
+            f"table.aggregate has no group_by, but the brief asks for one "
+            f"row per group ('per', 'by' or 'each'): step '{step.id}' "
+            f"summed everything into a single row. Add group_by naming the "
+            f"column to group on."
+        )
+
+        index = [item.id for item in plan.steps].index(step.id)
+
+        for later in plan.steps[index:]:
+            later.status = StepStatus.PENDING
+            later.result = None
+            later.error = None
+
+            state.results.pop(later.id, None)
+
+        del state.completed_steps[index:]
+
+        step.status = StepStatus.FAILED
+        step.error = error
+
+        state.results[step.id] = ToolResult(success=False, error=error)
+        state.failed_steps.append(step.id)
+        state.status = StepStatus.FAILED
+        state.current_step = None
+
+        self.logger.log("EXECUTOR", f"{step.id} failed: {error}")
+
+        save_state(state, self.job_path / "state.json")
+
+        return state
+
     # ------------------------------------------------------------------
     # Validation
     # ------------------------------------------------------------------
@@ -643,6 +832,11 @@ class AgentRuntime:
             progress=progress,
         ).execute(plan, self.job_id, resume=resume)
 
+        ungrouped = self._ungrouped_aggregate(plan, state)
+
+        if ungrouped is not None:
+            state = self._fail_ungrouped_aggregate(plan, state, ungrouped)
+
         self.logger.log(
             "EXECUTOR",
             f"Execution finished: {state.status.value}",
@@ -687,11 +881,17 @@ class AgentRuntime:
 
         instruction = self.read_instruction()
 
+        self._brief = instruction.text
+
         plan = self.create_plan(
             instruction,
             llm=llm,
             use_ai=use_ai,
         )
+
+        if self.plan_source in {"api", "chat"}:
+            if self._add_requested_order(plan, instruction.text):
+                self.save_plan(plan, self.plan_source)
 
         self.logger.log(
             "VALIDATOR",
@@ -1054,6 +1254,183 @@ def _headers_produced(
         return _literal_headers(arguments.get("headers"))
 
     return None
+
+
+ORDER_DESCENDING_HINTS = (
+    "largest",
+    "highest",
+    "biggest",
+    "descending",
+    "reverse",
+    "most to least",
+)
+
+ORDER_ASCENDING_HINTS = (
+    "smallest",
+    "lowest",
+    "least",
+    "ascending",
+    "a to z",
+    "alphabetical",
+    "earliest",
+    "oldest",
+)
+
+ORDER_WORDS = ("sort", "sorted", "order", "ordered", "rank", "ranked")
+
+GROUP_WORDS = ("per", "each")
+
+# A "by" only asks for groups after one of these: "grouped by", "totals
+# by region", "count by status". After anything else it is usually saying
+# something different — "signed off by the manager", "sorted by date".
+GROUP_BY_WORDS = (
+    "group",
+    "groups",
+    "grouped",
+    "grouping",
+    "total",
+    "totals",
+    "totaled",
+    "totalled",
+    "totaling",
+    "totalling",
+    "sum",
+    "sums",
+    "summed",
+    "summing",
+    "count",
+    "counts",
+    "counted",
+    "counting",
+    "average",
+    "averages",
+    "averaged",
+    "avg",
+    "mean",
+    "means",
+    "median",
+    "maximum",
+    "minimum",
+    "max",
+    "min",
+    "breakdown",
+    "split",
+    "tally",
+    "tallied",
+    "subtotal",
+    "subtotals",
+    "aggregate",
+    "aggregated",
+)
+
+
+def _requested_order(text: str) -> bool | None:
+    """Does the brief ask for an order, and which way? True means largest first.
+
+    None means there is no order to add: the brief asks for none at all, or
+    it asks for one without saying which way ("sorted by date"), where the
+    direction and the column are the model's to choose, not ours to guess.
+    """
+
+    lowered = (text or "").lower()
+
+    asked = any(word in lowered for word in ORDER_WORDS)
+
+    if not asked:
+        # "Highest first" and "from the largest down" ask for an order
+        # without using the word.
+        asked = any(
+            word in lowered
+            for word in ORDER_DESCENDING_HINTS + ORDER_ASCENDING_HINTS
+        ) and any(word in lowered for word in ("first", " down", " up"))
+
+    if not asked:
+        return None
+
+    if any(word in lowered for word in ORDER_DESCENDING_HINTS):
+        return True
+
+    if any(word in lowered for word in ORDER_ASCENDING_HINTS):
+        return False
+
+    # "sorted by date", with no direction: nothing to add.
+    return None
+
+
+def _requested_groups(text: str) -> bool:
+    """Does the brief ask for one row per group? ("per region", "totals by client")
+
+    "per" and "each" are unambiguous. "by" is not, so it only counts after a
+    word that asks for a total: "signed off by the manager" or "sorted by
+    date" reads as no grouping at all, and the brief is left alone.
+    """
+
+    words = re.findall(r"[a-z']+", (text or "").lower())
+
+    if any(word in GROUP_WORDS for word in words):
+        return True
+
+    return any(
+        word == "by" and index > 0 and words[index - 1] in GROUP_BY_WORDS
+        for index, word in enumerate(words)
+    )
+
+
+def _sorts_this(
+    plan: JobPlan,
+    index: int,
+    step_id: str,
+    column: str,
+) -> bool:
+    """Is there already a sort of this step's rows, or of this column?"""
+
+    for later in plan.steps[index:]:
+        if later.tool != "table" or later.action != "sort":
+            continue
+
+        arguments = later.arguments or {}
+
+        if arguments.get("column") == column:
+            return True
+
+        if arguments.get("rows") == f"${step_id}.rows":
+            return True
+
+    return False
+
+
+def _fresh_step_id(plan: JobPlan, wanted: str) -> str:
+    """A step id nobody in the plan has yet."""
+
+    taken = {step.id for step in plan.steps}
+
+    if wanted not in taken:
+        return wanted
+
+    number = 2
+
+    while f"{wanted}_{number}" in taken:
+        number += 1
+
+    return f"{wanted}_{number}"
+
+
+def _repoint(value, old: str, new: str):
+    """Point references to one step at another, after a step is inserted."""
+
+    if isinstance(value, str):
+        return value.replace(f"${old}.", f"${new}.")
+
+    if isinstance(value, list):
+        return [_repoint(item, old, new) for item in value]
+
+    if isinstance(value, dict):
+        return {
+            key: _repoint(item, old, new)
+            for key, item in value.items()
+        }
+
+    return value
 
 
 def _unknown_table_column(
