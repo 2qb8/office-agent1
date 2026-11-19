@@ -866,6 +866,14 @@ class AgentRuntime:
                 resume=state,
             )
 
+            if _failed_the_same_way(state, failed_id, error):
+                self.logger.log(
+                    "PLANNER",
+                    f"Stopping repairs: the revision failed "
+                    f"'{failed_id}' with the same error",
+                )
+                break
+
         if self.revisions:
             self.save_plan(plan, self.plan_source)
 
@@ -1119,6 +1127,23 @@ def _keeps_completed_steps(plan: JobPlan, state: JobState) -> bool:
     return [
         step.id for step in plan.steps[: len(completed)]
     ] == completed
+
+
+def _failed_the_same_way(
+    state: JobState,
+    step_id: str,
+    error: str,
+) -> bool:
+    """Did the revision fail again on the same step with the same message?"""
+
+    if not state.failed_steps or state.failed_steps[-1] != step_id:
+        return False
+
+    result = state.results.get(step_id)
+
+    again = (result.error if result is not None else "") or ""
+
+    return again == error
 
 
 def _revision_record(

@@ -104,6 +104,14 @@ models receive the same revision prompt and the same allowed list in the
 error; the 3B reads it and the 1.5B copies its own call back, so the hints
 stay.
 
+A revision that fails the same step with the same error now ends the loop
+instead of paying for the next one (`_failed_the_same_way` in
+`agent/runtime.py`). 1.5B on the invoice brief again: it wrote
+`op="is_not_empty"`, the revision sent that same call back, and the run
+stopped after one revision — two model calls instead of three, same no-file
+ending. The wall clock is not comparable to the 292s above; this run was on a
+faster machine and planned in 33s, 56s in total.
+
 ## What is still the limit
 
 - **The shipped example never passes.** Both models write the DOCX table step
@@ -115,9 +123,9 @@ stay.
   its content checks now pass when it does produce. The grammar fixed its
   rejections, not its understanding.
 - **Arguments are still the model's.** `op="is"` and `op="empty"` are what
-  the grammar cannot see. The repair loop now retries them (see below);
-  1.5B answers with the same operator again, so the retry buys time and no
-  plan.
+  the grammar cannot see. The repair loop now retries them (see above);
+  1.5B answers with the same operator again, and the loop stops at that second
+  identical failure, so it costs one retry and still no plan.
 - One sample per brief per model, CPU-only, so timings wander by tens of
   seconds between runs; the valid/output/right columns did not wander across
   the three runs recorded here.

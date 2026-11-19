@@ -332,7 +332,11 @@ class RepairTests(RepairTestCase):
         self.assertEqual(len(report["revisions"]), 1)
 
     def test_the_run_stops_after_two_repairs(self):
-        llm = ScriptedLLM(plan_with("Report"))
+        llm = ScriptedLLM(
+            plan_with("Report"),
+            plan_with("Report one"),
+            plan_with("Report two"),
+        )
 
         runtime, state = self.run_job(llm)
 
@@ -348,6 +352,20 @@ class RepairTests(RepairTestCase):
             [1, 2],
         )
         self.assertFalse((self.job / "output" / "rows.txt").exists())
+
+    def test_a_repeated_failure_stops_the_repairs(self):
+        llm = ScriptedLLM(plan_with("Report"))
+
+        runtime, state = self.run_job(llm)
+
+        self.assertEqual(state.status.value, "failed")
+
+        # The revision repeated the same wrong sheet, so the second identical
+        # call is not made.
+        self.assertEqual(len(llm.prompts), 2)
+        self.assertEqual(len(self.saved_plan()["revisions"]), 1)
+        self.assertIn("with the same error", self.log())
+        self.assertNotIn("Repair attempt 2/2", self.log())
 
     def test_a_broken_file_is_not_a_planning_mistake(self):
         (self.job / "inputs" / "broken.xlsx").write_bytes(b"not a zip")
