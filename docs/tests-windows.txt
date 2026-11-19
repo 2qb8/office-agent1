@@ -1,10 +1,10 @@
 Office Agent test summary — Windows
-Run:     https://github.com/2qb8/office-agent1/actions/runs/44231387030
-Commit:  dbff39c (2026-11-18T03:35Z)
+Run:     https://github.com/2qb8/office-agent1/actions/runs/44456023655
+Commit:  a45d036 (2026-11-19T04:07Z)
 Python:  3.12.10, Windows 2025Server
 
-Suite:   264 tests in 19.7s
-Pass:    264
+Suite:   272 tests in 21.5s
+Pass:    272
 Skip:    0
 Fail:    0
 Error:   0
